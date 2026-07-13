@@ -17,7 +17,9 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
+    #[command(name = "uuidgen")]
     UUidGen,
+    #[command(name = "tconv")]
     Tconv,
 }
 
@@ -25,7 +27,10 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::UUidGen => {}
+        Commands::UUidGen => {
+            let generated = uuidgen::gen_uuid();
+            println!("{}", generated);
+        }
         Commands::Tconv => {}
     }
 }
