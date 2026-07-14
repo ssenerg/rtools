@@ -24,6 +24,7 @@ struct Cli {
 enum Commands {
     #[command(name = "uuid")]
     UuidGen(uuidgen::UuidGenArgs),
+
     #[command(name = "tconv")]
     Tconv,
 
@@ -38,9 +39,6 @@ fn main() {
     match &cli.command {
         Commands::UuidGen(args) => uuidgen::run(args, cli.copy),
         Commands::Tconv => tconv::run(cli.copy),
-
-        Commands::GoStruct(args) => {
-            gostruct::run(args);
-        }
+        Commands::GoStruct(args) => gostruct::run(args, cli.copy),
     }
 }
