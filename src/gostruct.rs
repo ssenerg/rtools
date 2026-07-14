@@ -17,6 +17,7 @@ pub struct Args {
     #[arg(short, long)]
     json: bool,
 }
+
 pub fn run(args: &Args) {
     let json_str = read_input(&args.input);
 
@@ -58,18 +59,12 @@ fn json_value_to_go_type(value: &Value, with_json_tags: bool, indent: u64) -> St
 
 #[allow(dead_code)]
 fn check_tag(s: &str) {
-    let mut chars = s.chars();
-    loop {
-        match chars.next() {
-            None => break,
-            Some(c) => {
-                if c == ',' || c == '\\' || c == '"' || c == '\'' {
-                    panic!(
-                        "Tag can not contain \",\" or \"\\\", you have to implement custom unmarshaler for this field."
-                    );
-                }
-            }
-        }
+    if s.chars()
+        .any(|c| c == ',' || c == '\\' || c == '"' || c == '\'')
+    {
+        panic!(
+            "Tag can not contain \",\" or \"\\\" or \"\"\" or \"\'\", you have to implement custom unmarshaler for this field."
+        );
     }
 }
 
