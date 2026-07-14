@@ -1,4 +1,7 @@
 use clap::Parser;
+use serde_json::Value;
+use std::fs;
+use std::io::{self, Read};
 
 #[derive(Parser, Debug)]
 pub struct Args {
@@ -11,12 +14,46 @@ pub struct Args {
     name: String,
 
     /// Use json tags
-    #[arg(long, default_value_t = true)]
+    #[arg(short, long)]
     json: bool,
 }
-
 pub fn run(args: &Args) {
-    println!("{:?}", args);
+    let json_str = read_input(&args.input);
+
+    if json_str.trim().is_empty() {
+        panic!("Error: Empty input provided. Pipe JSON or use --input file.json");
+    }
+
+    match serde_json::from_str::<Value>(&json_str) {
+        Ok(value) => {
+            let go_code = format!(
+                "type {} struct {{\n{}}}\n",
+                &args.name,
+                json_value_to_go_type(&value, args.json, 1)
+            );
+            println!("{}", go_code);
+        }
+        Err(e) => {
+            panic!("Failed to parse JSON: {}", e);
+        }
+    }
+}
+
+fn read_input(input_file: &Option<String>) -> String {
+    if let Some(file) = input_file {
+        fs::read_to_string(file).expect("Failed to read from file")
+    } else {
+        let mut buffer = String::new();
+        io::stdin()
+            .read_to_string(&mut buffer)
+            .expect("Failed to read from stdin");
+        buffer
+    }
+}
+
+fn json_value_to_go_type(value: &Value, with_json_tags: bool, indent: u64) -> String {
+    let _ = (value, with_json_tags, indent);
+    String::new() // TODO
 }
 
 #[allow(dead_code)]
