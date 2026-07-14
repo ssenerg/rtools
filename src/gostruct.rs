@@ -14,6 +14,79 @@ pub struct Args {
     #[arg(long, default_value_t = true)]
     json: bool,
 }
+
 pub fn run(args: &Args) {
     println!("{:?}", args);
+}
+
+#[allow(dead_code)]
+fn make_field_name(s: &str) -> String {
+    let result: String = s
+        .trim()
+        .split(|c: char| c.is_ascii_punctuation() || c.is_whitespace())
+        .filter(|w| !w.is_empty())
+        .map(|word| {
+            let lowered = word.to_lowercase();
+            let mut chars = lowered.chars();
+            match chars.next() {
+                None => String::new(),
+                Some(first) => first.to_uppercase().chain(chars).collect(),
+            }
+        })
+        .collect();
+
+    if result.is_empty() {
+        panic!("Cannot make field name for key: \"{}\"", s);
+    }
+
+    match result.chars().next() {
+        None => panic!("Cannot make field name for key: \"{}\"", s),
+        Some(c) => {
+            if !c.is_alphabetic() {
+                panic!(
+                    "Cannot make field name for key (first char is not alphabetic): \"{}\"",
+                    s
+                )
+            }
+        }
+    }
+    result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_make_field_name() {
+        assert_eq!(make_field_name("heLLo_world"), "HelloWorld");
+        assert_eq!(make_field_name("hello__world"), "HelloWorld");
+        assert_eq!(make_field_name("XML_HTTP_*()REQUEST"), "XmlHttpRequest");
+        assert_eq!(make_field_name("iPhone"), "Iphone");
+        assert_eq!(make_field_name("API_V2_RESPONSE"), "ApiV2Response");
+        assert_eq!(make_field_name("user_id"), "UserId");
+        assert_eq!(make_field_name("max-100-items"), "Max100Items");
+        assert_eq!(make_field_name("_hello.world_"), "HelloWorld");
+        assert_eq!(make_field_name("__hEllo.world_"), "HelloWorld");
+        assert_eq!(make_field_name("hello"), "Hello");
+        assert_eq!(make_field_name("a"), "A");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_empty_input() {
+        make_field_name("");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_only_separators() {
+        make_field_name("{");
+        make_field_name(",{ \x09");
+        make_field_name("_");
+        make_field_name(".");
+        make_field_name(" ");
+        make_field_name("-");
+        make_field_name("___ - .");
+    }
 }
