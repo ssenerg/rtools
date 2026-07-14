@@ -20,6 +20,23 @@ pub fn run(args: &Args) {
 }
 
 #[allow(dead_code)]
+fn check_tag(s: &str) {
+    let mut chars = s.chars();
+    loop {
+        match chars.next() {
+            None => break,
+            Some(c) => {
+                if c == ',' || c == '\\' || c == '"' || c == '\'' {
+                    panic!(
+                        "Tag can not contain \",\" or \"\\\", you have to implement custom unmarshaler for this field."
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[allow(dead_code)]
 fn make_field_name(s: &str) -> String {
     let result: String = s
         .trim()
@@ -58,6 +75,22 @@ mod tests {
     use super::*;
 
     #[test]
+    #[should_panic]
+    fn test_check_tag_panic() {
+        check_tag("hello,world");
+        check_tag("hello\\world");
+        check_tag("hello\"world");
+        check_tag("hello'world");
+    }
+
+    #[test]
+    fn test_check_tag_ok() {
+        check_tag("hello world");
+        check_tag("hello...world");
+        check_tag("hello/world");
+    }
+
+    #[test]
     fn test_make_field_name() {
         assert_eq!(make_field_name("heLLo_world"), "HelloWorld");
         assert_eq!(make_field_name("hello__world"), "HelloWorld");
@@ -70,12 +103,20 @@ mod tests {
         assert_eq!(make_field_name("__hEllo.world_"), "HelloWorld");
         assert_eq!(make_field_name("hello"), "Hello");
         assert_eq!(make_field_name("a"), "A");
+        assert_eq!(make_field_name("as用a.sjlk"), "As用aSjlk");
     }
 
     #[test]
     #[should_panic]
     fn test_empty_input() {
         make_field_name("");
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_non_alph_on_first_char() {
+        make_field_name("0asjlk");
+        make_field_name("用asjlk");
     }
 
     #[test]
