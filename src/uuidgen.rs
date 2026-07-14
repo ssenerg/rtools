@@ -108,3 +108,157 @@ fn format_uuid(uuid: &Uuid, format: Format, uppercase: bool) -> String {
     };
     if uppercase { s.to_uppercase() } else { s }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make(version: u8) -> Uuid {
+        generate(version, None, None).expect("version should generate")
+    }
+
+    #[test]
+    fn generates_each_supported_version() {
+        for version in [1u8, 4, 6, 7, 8] {
+            assert_eq!(
+                make(version).get_version_num(),
+                version as usize,
+                "v{version} should report its own version number"
+            );
+        }
+    }
+
+    #[test]
+    fn v3_and_v5_report_their_version() {
+        let v3 = generate(3, Some("dns"), Some("example.com")).unwrap();
+        let v5 = generate(5, Some("dns"), Some("example.com")).unwrap();
+        assert_eq!(v3.get_version_num(), 3);
+        assert_eq!(v5.get_version_num(), 5);
+    }
+
+    #[test]
+    fn v3_and_v5_are_deterministic_with_known_values() {
+        // Canonical hashes for the DNS namespace + "example.com".
+        assert_eq!(
+            generate(3, Some("dns"), Some("example.com"))
+                .unwrap()
+                .hyphenated()
+                .to_string(),
+            "9073926b-929f-31c2-abc9-fad77ae3e8eb"
+        );
+        assert_eq!(
+            generate(5, Some("dns"), Some("example.com"))
+                .unwrap()
+                .hyphenated()
+                .to_string(),
+            "cfbff0d1-9375-5685-968c-48ce8b15ae17"
+        );
+    }
+
+    #[test]
+    fn v4_is_random_across_calls() {
+        assert_ne!(make(4), make(4));
+    }
+
+    #[test]
+    fn v7_is_time_ordered() {
+        // v7 embeds a millisecond timestamp in the high bits
+        let first = make(7);
+        let second = make(7);
+        assert!(second >= first);
+    }
+
+    #[test]
+    fn v3_requires_namespace_and_name() {
+        assert!(
+            generate(3, None, Some("x"))
+                .unwrap_err()
+                .contains("namespace")
+        );
+        assert!(generate(3, Some("dns"), None).unwrap_err().contains("name"));
+        assert!(generate(5, None, None).unwrap_err().contains("namespace"));
+    }
+
+    #[test]
+    fn v2_is_rejected() {
+        assert!(generate(2, None, None).unwrap_err().contains("v2"));
+    }
+
+    #[test]
+    fn unknown_versions_are_rejected() {
+        for version in [0u8, 9, 255] {
+            assert!(
+                generate(version, None, None)
+                    .unwrap_err()
+                    .contains("unsupported"),
+                "v{version} should be unsupported"
+            );
+        }
+    }
+
+    #[test]
+    fn parse_namespace_accepts_aliases_case_insensitively() {
+        assert_eq!(parse_namespace("dns").unwrap(), Uuid::NAMESPACE_DNS);
+        assert_eq!(parse_namespace("URL").unwrap(), Uuid::NAMESPACE_URL);
+        assert_eq!(parse_namespace("Oid").unwrap(), Uuid::NAMESPACE_OID);
+        assert_eq!(parse_namespace("x500").unwrap(), Uuid::NAMESPACE_X500);
+    }
+
+    #[test]
+    fn parse_namespace_accepts_a_raw_uuid() {
+        let raw = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
+        assert_eq!(parse_namespace(raw).unwrap(), Uuid::parse_str(raw).unwrap());
+    }
+
+    #[test]
+    fn parse_namespace_rejects_garbage() {
+        assert!(
+            parse_namespace("not-a-namespace")
+                .unwrap_err()
+                .contains("invalid namespace")
+        );
+    }
+
+    #[test]
+    fn random_node_sets_multicast_bit() {
+        // The multicast bit must be set -> the synthetic node never collides with a real (unicast) hardware MAC
+        for _ in 0..100 {
+            assert_eq!(random_node()[0] & 0x01, 0x01);
+        }
+    }
+
+    #[test]
+    fn random_node_varies() {
+        assert_ne!(random_node(), random_node());
+    }
+
+    #[test]
+    fn format_uuid_renders_each_form() {
+        let uuid = Uuid::parse_str("67e55044-10b1-426f-9247-bb680e5fe0c8").unwrap();
+        assert_eq!(
+            format_uuid(&uuid, Format::Hyphenated, false),
+            "67e55044-10b1-426f-9247-bb680e5fe0c8"
+        );
+        assert_eq!(
+            format_uuid(&uuid, Format::Simple, false),
+            "67e5504410b1426f9247bb680e5fe0c8"
+        );
+        assert_eq!(
+            format_uuid(&uuid, Format::Urn, false),
+            "urn:uuid:67e55044-10b1-426f-9247-bb680e5fe0c8"
+        );
+        assert_eq!(
+            format_uuid(&uuid, Format::Braced, false),
+            "{67e55044-10b1-426f-9247-bb680e5fe0c8}"
+        );
+    }
+
+    #[test]
+    fn format_uuid_uppercases_when_requested() {
+        let uuid = Uuid::parse_str("67e55044-10b1-426f-9247-bb680e5fe0c8").unwrap();
+        assert_eq!(
+            format_uuid(&uuid, Format::Hyphenated, true),
+            "67E55044-10B1-426F-9247-BB680E5FE0C8"
+        );
+    }
+}
