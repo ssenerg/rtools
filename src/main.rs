@@ -1,4 +1,5 @@
 mod tconv;
+mod utils;
 mod uuidgen;
 
 use clap::{Parser, Subcommand};
@@ -13,12 +14,15 @@ use clap::{Parser, Subcommand};
 struct Cli {
     #[command(subcommand)]
     command: Commands,
+
+    #[arg(short = 'c', long = "copy", global = true)]
+    copy: bool,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    #[command(name = "uuidgen")]
-    UUidGen,
+    #[command(name = "uuid")]
+    UuidGen(uuidgen::UuidGenArgs),
     #[command(name = "tconv")]
     Tconv,
 }
@@ -27,10 +31,7 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::UUidGen => {
-            let generated = uuidgen::gen_uuid();
-            println!("{}", generated);
-        }
-        Commands::Tconv => {}
+        Commands::UuidGen(args) => uuidgen::run(args, cli.copy),
+        Commands::Tconv => tconv::run(cli.copy),
     }
 }
