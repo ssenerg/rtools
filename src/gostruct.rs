@@ -29,7 +29,7 @@ pub fn run(args: &Args) {
         Ok(value) => {
             let go_code = format!(
                 "type {} {}",
-                &args.name,
+                args.name,
                 json_value_to_go_type(&value, args.json, 0)
             );
             println!("{}", go_code);
