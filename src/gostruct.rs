@@ -73,6 +73,8 @@ fn json_value_to_go_type(
 
 #[derive(Debug, Clone, PartialEq)]
 enum GoType {
+    /// No type information yet (empty object/array); identity for merging
+    Unknown,
     Null,
     Any,
     Bool,
@@ -109,12 +111,12 @@ fn infer_type(value: &Value) -> Result<GoType, String> {
             }
         }
         Value::Array(items) => {
-            let elem = merge_all(items.iter().map(infer_type))?.unwrap_or(GoType::Any);
+            let elem = merge_all(items.iter().map(infer_type))?.unwrap_or(GoType::Unknown);
             Ok(GoType::Slice(Box::new(elem)))
         }
         Value::Object(map) => {
             if map.is_empty() {
-                return Ok(GoType::Map(Box::new(GoType::Any)));
+                return Ok(GoType::Map(Box::new(GoType::Unknown)));
             }
             let mut fields: Vec<(String, GoType)> = Vec::with_capacity(map.len());
             for (k, v) in map {
@@ -154,6 +156,7 @@ fn merge_types(a: GoType, b: GoType) -> Result<GoType, String> {
         return Ok(a);
     }
     match (a, b) {
+        (Unknown, t) | (t, Unknown) => Ok(t),
         (Null, t) | (t, Null) => match t {
             Any => Ok(Any),
             Ptr(inner) => Ok(Ptr(inner)),
@@ -188,7 +191,7 @@ fn merge_types(a: GoType, b: GoType) -> Result<GoType, String> {
 fn wrap_ptr(t: GoType) -> Result<GoType, String> {
     match t {
         // any already covers nil
-        GoType::Null | GoType::Any => Ok(GoType::Any),
+        GoType::Unknown | GoType::Null | GoType::Any => Ok(GoType::Any),
         GoType::Ptr(inner) => Ok(GoType::Ptr(inner)),
         other => Ok(GoType::Ptr(Box::new(other))),
     }
@@ -209,18 +212,52 @@ fn merge_structs(f1: Vec<(String, GoType)>, f2: Vec<(String, GoType)>) -> Result
             let merged = merge_types(t, t2)?;
             fields.push((k, merged));
         }
-        Ok(GoType::Struct(fields))
-    } else {
-        // Same shape but different keys: it is a map, merge all values
+        return Ok(GoType::Struct(fields));
+    }
+
+    // Different keys with only scalar values: a keyed collection, not a record
+    if f1.iter().chain(f2.iter()).all(|(_, t)| is_scalar(t)) {
         let value_type =
             merge_all(f1.into_iter().chain(f2).map(|(_, t)| Ok(t)))?.unwrap_or(GoType::Any);
-        Ok(GoType::Map(Box::new(value_type)))
+        return Ok(GoType::Map(Box::new(value_type)));
+    }
+
+    // Different keys with nested values: a record where some fields are
+    // optional, so fields missing on either side become pointers
+    let mut by_key: std::collections::HashMap<String, GoType> = std::collections::HashMap::new();
+    let mut order2 = Vec::with_capacity(f2.len());
+    for (k, t) in f2 {
+        order2.push(k.clone());
+        by_key.insert(k, t);
+    }
+    let mut fields = Vec::new();
+    for (k, t) in f1 {
+        let merged = match by_key.remove(&k) {
+            Some(t2) => merge_types(t, t2)?,
+            None => wrap_ptr(t)?,
+        };
+        fields.push((k, merged));
+    }
+    for k in order2 {
+        if let Some(t) = by_key.remove(&k) {
+            fields.push((k, wrap_ptr(t)?));
+        }
+    }
+    Ok(GoType::Struct(fields))
+}
+
+/// A leaf type (possibly behind a pointer): anything but a struct, map or slice
+fn is_scalar(t: &GoType) -> bool {
+    match t {
+        GoType::Ptr(inner) => is_scalar(inner),
+        GoType::Struct(_) | GoType::Map(_) | GoType::Slice(_) => false,
+        _ => true,
     }
 }
 
 fn render_type(t: &GoType, with_json_tags: bool, indent: u64) -> Result<String, String> {
     match t {
-        GoType::Null | GoType::Any => Ok("any".to_string()),
+        GoType::Unknown | GoType::Null | GoType::Any => Ok("any".to_string()),
         GoType::Bool => Ok("bool".to_string()),
         GoType::Int => Ok("int".to_string()),
         GoType::Float => Ok("float64".to_string()),
@@ -318,14 +355,8 @@ fn make_field_name(s: &str) -> Result<String, String> {
         .trim()
         .split(|c: char| c.is_ascii_punctuation() || c.is_whitespace())
         .filter(|w| !w.is_empty())
-        .map(|word| {
-            let lowered = word.to_lowercase();
-            let mut chars = lowered.chars();
-            match chars.next() {
-                None => String::new(),
-                Some(first) => first.to_uppercase().chain(chars).collect(),
-            }
-        })
+        .flat_map(split_case_words)
+        .map(|word| pascalize(&word))
         .collect();
 
     match result.chars().next() {
@@ -340,6 +371,46 @@ fn make_field_name(s: &str) -> Result<String, String> {
                 Ok(result)
             }
         }
+    }
+}
+
+/// Split a word at camelCase/PascalCase boundaries: before an uppercase
+/// following a lowercase or digit, and before the last uppercase of an
+/// acronym run followed by a lowercase (HTTPServer -> HTTP, Server)
+fn split_case_words(word: &str) -> Vec<String> {
+    let chars: Vec<char> = word.chars().collect();
+    let mut words = Vec::new();
+    let mut cur = String::new();
+    for (i, &c) in chars.iter().enumerate() {
+        if !cur.is_empty() && c.is_uppercase() {
+            let prev = chars[i - 1];
+            let next_is_lower = chars.get(i + 1).is_some_and(|n| n.is_lowercase());
+            if prev.is_lowercase() || prev.is_numeric() || (prev.is_uppercase() && next_is_lower) {
+                words.push(std::mem::take(&mut cur));
+            }
+        }
+        cur.push(c);
+    }
+    if !cur.is_empty() {
+        words.push(cur);
+    }
+    words
+}
+
+/// Uppercase the first letter, keeping the rest of the word intact;
+/// fully-uppercase words (acronyms) are title-cased so XML becomes Xml
+fn pascalize(word: &str) -> String {
+    let is_acronym =
+        word.chars().count() > 1 && word.chars().all(|c| c.is_uppercase() || c.is_numeric());
+    let word = if is_acronym {
+        word.to_lowercase()
+    } else {
+        word.to_string()
+    };
+    let mut chars = word.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(first) => first.to_uppercase().chain(chars).collect(),
     }
 }
 
@@ -468,6 +539,48 @@ struct {
     }
 
     #[test]
+    fn test_differing_keys_with_nested_values_stay_struct() {
+        // Objects that share most keys but miss a few, and hold nested
+        // values, are records with optional fields — not maps
+        let out = generate(
+            r#"[
+                {"symbol": "A", "isin": "GB1", "levels": [{"m": 0.1}], "schedules": {}},
+                {"symbol": "B", "lastTradingTime": "t", "levels": [{"m": 0.2}], "schedules": {"eu": {"r": 1}, "us": {"r": 2}}}
+            ]"#,
+            true,
+        );
+        let expected = "\
+[]struct {
+    Symbol string  `json:\"symbol\"`
+    Isin   *string `json:\"isin\"`
+    Levels []struct {
+        M float64 `json:\"m\"`
+    } `json:\"levels\"`
+    Schedules map[string]struct {
+        R int `json:\"r\"`
+    } `json:\"schedules\"`
+    LastTradingTime *string `json:\"lastTradingTime\"`
+}";
+        assert_eq!(out, expected);
+    }
+
+    #[test]
+    fn test_empty_containers_merge_neutrally() {
+        assert_eq!(generate(r#"[[], [1, 2]]"#, true), "[][]int");
+        assert_eq!(
+            generate(r#"[{"t": []}, {"t": ["a"]}]"#, false),
+            "[]struct {\n    T []string\n}"
+        );
+        assert_eq!(
+            generate(
+                r#"[{"m": {}}, {"m": {"a": {"r": 1}, "b": {"r": 2}}}]"#,
+                false
+            ),
+            "[]struct {\n    M map[string]struct {\n        R int\n    }\n}"
+        );
+    }
+
+    #[test]
     fn test_incompatible_types_become_any() {
         let out = generate(r#"[{"a": 3}, {"a": "value"}]"#, true);
         assert_eq!(out, "[]struct {\n    A any `json:\"a\"`\n}");
@@ -504,18 +617,36 @@ struct {
 
     #[test]
     fn test_make_field_name() {
-        assert_eq!(make_field_name("heLLo_world").unwrap(), "HelloWorld");
+        assert_eq!(make_field_name("heLLo_world").unwrap(), "HeLLoWorld");
         assert_eq!(make_field_name("hello__world").unwrap(), "HelloWorld");
         assert_eq!(
             make_field_name("XML_HTTP_*()REQUEST").unwrap(),
             "XmlHttpRequest"
         );
-        assert_eq!(make_field_name("iPhone").unwrap(), "Iphone");
+        assert_eq!(make_field_name("iPhone").unwrap(), "IPhone");
         assert_eq!(make_field_name("API_V2_RESPONSE").unwrap(), "ApiV2Response");
         assert_eq!(make_field_name("user_id").unwrap(), "UserId");
         assert_eq!(make_field_name("max-100-items").unwrap(), "Max100Items");
         assert_eq!(make_field_name("_hello.world_").unwrap(), "HelloWorld");
-        assert_eq!(make_field_name("__hEllo.world_").unwrap(), "HelloWorld");
+        assert_eq!(make_field_name("__hEllo.world_").unwrap(), "HElloWorld");
+        // camelCase and PascalCase both convert to PascalCase
+        assert_eq!(
+            make_field_name("lastTradingTime").unwrap(),
+            "LastTradingTime"
+        );
+        assert_eq!(
+            make_field_name("LastTradingTime").unwrap(),
+            "LastTradingTime"
+        );
+        assert_eq!(
+            make_field_name("fundingRateCoefficient").unwrap(),
+            "FundingRateCoefficient"
+        );
+        assert_eq!(make_field_name("XMLHttpRequest").unwrap(), "XmlHttpRequest");
+        assert_eq!(
+            make_field_name("numNonContractUnits").unwrap(),
+            "NumNonContractUnits"
+        );
         assert_eq!(make_field_name("hello").unwrap(), "Hello");
         assert_eq!(make_field_name("a").unwrap(), "A");
         assert_eq!(make_field_name("as用a.sjlk").unwrap(), "As用aSjlk");
