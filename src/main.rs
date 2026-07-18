@@ -1,5 +1,6 @@
 mod gostruct;
 mod tconv;
+mod unix;
 mod utils;
 mod uuidgen;
 
@@ -31,6 +32,10 @@ enum Commands {
     /// Generate a Go struct from a JSON file
     #[command(name = "gostruct")]
     GoStruct(gostruct::Args),
+
+    /// Work with unix timestamps
+    #[command(name = "unix")]
+    Unix(unix::Args),
 }
 
 fn main() {
@@ -40,5 +45,6 @@ fn main() {
         Commands::UuidGen(args) => uuidgen::run(args, cli.copy),
         Commands::Tconv => tconv::run(cli.copy),
         Commands::GoStruct(args) => gostruct::run(args, cli.copy),
+        Commands::Unix(args) => unix::run(args),
     }
 }
