@@ -1,10 +1,12 @@
 use chrono::{DateTime, FixedOffset, Local, TimeZone};
 use clap::Parser;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Unix timestamp (seconds, milliseconds, microseconds, or nanoseconds)
-    ts: i64,
+    #[arg(default_value = "now")]
+    ts: String,
 
     /// Timezone: "UTC", "local", or a fixed offset like "+03:30" / "-0500"
     #[arg(short, long, default_value = "UTC")]
@@ -59,10 +61,19 @@ fn parse_offset(tz: &str) -> Option<FixedOffset> {
 }
 
 pub fn run(args: &Args) {
-    let (unit, secs, nanos) = detect_unit(args.ts);
+    let ts: i64 = if args.ts.to_lowercase().trim() == "now" {
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos() as i64
+    } else {
+        args.ts.parse::<i64>().unwrap()
+    };
+
+    let (unit, secs, nanos) = detect_unit(ts);
 
     let Some(utc) = DateTime::from_timestamp(secs, nanos) else {
-        eprintln!("error: timestamp {} is out of range", args.ts);
+        eprintln!("error: timestamp {} is out of range", ts);
         std::process::exit(1);
     };
 
