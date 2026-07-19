@@ -9,6 +9,8 @@ serde_json = { version = "1.0.150", features = ["preserve_order"] }
 uuid = { version = "1", features = ["v1", "v3", "v4", "v5", "v6", "v7", "v8"] }
 arboard = { version = "3", default-features = false }
 chrono = "0.4.45"
+qrcode = { version = "0.14", default-features = false }
+terminal_size = "0.4"
 
 [profile.release]
 codegen-units = 1

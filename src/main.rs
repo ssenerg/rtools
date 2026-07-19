@@ -1,4 +1,5 @@
 mod gostruct;
+mod qrcode;
 mod tconv;
 mod unix;
 mod utils;
@@ -36,6 +37,10 @@ enum Commands {
     /// Work with unix timestamps
     #[command(name = "unix")]
     Unix(unix::Args),
+
+    /// Generate QRCode in terminal
+    #[command(name = "qrcode")]
+    QRCode(qrcode::Args),
 }
 
 fn main() {
@@ -46,5 +51,6 @@ fn main() {
         Commands::Tconv => tconv::run(cli.copy),
         Commands::GoStruct(args) => gostruct::run(args, cli.copy),
         Commands::Unix(args) => unix::run(args),
+        Commands::QRCode(args) => qrcode::run(args),
     }
 }

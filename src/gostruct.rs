@@ -1,8 +1,6 @@
 use crate::utils;
 use clap::Parser;
 use serde_json::Value;
-use std::fs;
-use std::io::{self, Read};
 use std::process::exit;
 
 #[derive(Parser, Debug)]
@@ -36,7 +34,7 @@ pub fn run(args: &Args, copy: bool) {
 }
 
 fn generate_code(args: &Args) -> Result<String, String> {
-    let json_str = read_input(&args.input)?;
+    let json_str = utils::read_stdin_or_file(&args.input)?;
 
     if json_str.trim().is_empty() {
         return Err("Empty input provided. Pipe JSON or use --input file.json".to_string());
@@ -49,18 +47,6 @@ fn generate_code(args: &Args) -> Result<String, String> {
         args.name,
         json_value_to_go_type(&value, args.json, 0)?
     ))
-}
-
-fn read_input(input_file: &Option<String>) -> Result<String, String> {
-    if let Some(file) = input_file {
-        fs::read_to_string(file).map_err(|e| format!("Failed to read from file: {}", e))
-    } else {
-        let mut buffer = String::new();
-        io::stdin()
-            .read_to_string(&mut buffer)
-            .map_err(|e| format!("Failed to read from stdin: {}", e))?;
-        Ok(buffer)
-    }
 }
 
 fn json_value_to_go_type(
