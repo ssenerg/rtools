@@ -2,6 +2,8 @@ use chrono::{DateTime, FixedOffset, Local, TimeZone};
 use clap::Parser;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::utils;
+
 #[derive(Parser, Debug)]
 pub struct Args {
     /// Unix timestamp (seconds, milliseconds, microseconds, or nanoseconds)
@@ -60,7 +62,8 @@ fn parse_offset(tz: &str) -> Option<FixedOffset> {
     FixedOffset::east_opt(sign * (hours * 3600 + minutes * 60))
 }
 
-pub fn run(args: &Args) {
+pub fn run(args: &Args, copy: bool) {
+    utils::no_copy_support(copy);
     let ts: i64 = if args.ts.to_lowercase().trim() == "now" {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)

@@ -31,3 +31,9 @@ pub fn read_stdin_or_file(input_file: &Option<String>) -> Result<String, String>
         Ok(buffer)
     }
 }
+
+pub fn no_copy_support(copy: bool) {
+    if copy {
+        eprintln!("copy is not supported for this command")
+    }
+}

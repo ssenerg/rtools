@@ -50,7 +50,7 @@ fn main() {
         Commands::UuidGen(args) => uuidgen::run(args, cli.copy),
         Commands::Tconv => tconv::run(cli.copy),
         Commands::GoStruct(args) => gostruct::run(args, cli.copy),
-        Commands::Unix(args) => unix::run(args),
-        Commands::QRCode(args) => qrcode::run(args),
+        Commands::Unix(args) => unix::run(args, cli.copy),
+        Commands::QRCode(args) => qrcode::run(args, cli.copy),
     }
 }
