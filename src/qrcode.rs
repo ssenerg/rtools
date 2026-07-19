@@ -51,13 +51,13 @@ fn check_terminal_size(qr: &str) {
     let need_h = qr.lines().count();
     let need_w = qr.lines().map(|l| l.chars().count()).max().unwrap_or(0);
 
-    if let Some((Width(cols), Height(rows))) = terminal_size() {
-        if (cols as usize) < need_w || (rows as usize) < need_h {
-            eprintln!(
-                "Error: terminal is too small to render the QR code properly: need {}x{}, have {}x{}",
-                need_w, need_h, cols, rows
-            );
-            exit(1);
-        }
+    if let Some((Width(cols), Height(rows))) = terminal_size()
+        && ((cols as usize) < need_w || (rows as usize) < need_h)
+    {
+        eprintln!(
+            "Error: terminal is too small to render the QR code properly: need {}x{}, have {}x{}",
+            need_w, need_h, cols, rows
+        );
+        exit(1);
     }
 }
