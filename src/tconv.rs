@@ -71,13 +71,19 @@ fn parse_datetime(input: &str) -> Option<DateTime<Utc>> {
         return Some(dt.with_timezone(&Utc));
     }
 
-    let layouts = ["%Y-%m-%d %H:%M:%S%.f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"];
+    let layouts = ["%Y-%m-%d %H:%M:%S%.f", "%Y-%m-%d %H:%M:%S"];
 
     for layout in layouts {
         if let Ok(dt) = NaiveDateTime::parse_from_str(input, layout) {
             let local = Local.from_local_datetime(&dt).single()?;
             return Some(local.with_timezone(&Utc));
         }
+    }
+
+    if let Ok(date) = chrono::NaiveDate::parse_from_str(input, "%Y-%m-%d") {
+        let dt = date.and_hms_opt(0, 0, 0)?;
+        let local = Local.from_local_datetime(&dt).single()?;
+        return Some(local.with_timezone(&Utc));
     }
 
     None
