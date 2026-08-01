@@ -28,7 +28,7 @@ enum Commands {
     UuidGen(uuidgen::UuidGenArgs),
 
     #[command(name = "tconv")]
-    Tconv,
+    Tconv(tconv::Args),
 
     /// Generate a Go struct from a JSON file
     #[command(name = "gostruct")]
@@ -48,7 +48,7 @@ fn main() {
 
     match &cli.command {
         Commands::UuidGen(args) => uuidgen::run(args, cli.copy),
-        Commands::Tconv => tconv::run(cli.copy),
+        Commands::Tconv(args) => tconv::run(args, cli.copy),
         Commands::GoStruct(args) => gostruct::run(args, cli.copy),
         Commands::Unix(args) => unix::run(args),
         Commands::QRCode(args) => qrcode::run(args),
