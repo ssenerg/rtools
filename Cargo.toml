@@ -12,6 +12,7 @@ chrono = "0.4.45"
 qrcode = { version = "0.14", default-features = false }
 terminal_size = "0.4"
 chrono-humanize = "0.2"
+crossterm = "0.29"
 
 [profile.release]
 codegen-units = 1

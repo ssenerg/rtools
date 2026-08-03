@@ -1,4 +1,5 @@
 mod gostruct;
+mod ports;
 mod qrcode;
 mod tconv;
 mod utils;
@@ -38,6 +39,10 @@ enum Commands {
     /// Generate QRCode in terminal
     #[command(name = "qrcode")]
     QRCode(qrcode::Args),
+
+    /// View active listening ports and kill them
+    #[command(name = "ports")]
+    Ports(ports::Args),
 }
 
 fn main() {
@@ -48,5 +53,6 @@ fn main() {
         Commands::Tconv(args) => tconv::run(args, cli.copy),
         Commands::GoStruct(args) => gostruct::run(args, cli.copy),
         Commands::QRCode(args) => qrcode::run(args),
+        Commands::Ports(args) => ports::run(args, cli.copy),
     }
 }
