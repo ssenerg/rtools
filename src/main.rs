@@ -1,3 +1,4 @@
+mod factor;
 mod gostruct;
 mod ports;
 mod qrcode;
@@ -43,6 +44,9 @@ enum Commands {
     /// View active listening ports and kill them
     #[command(name = "ports")]
     Ports(ports::Args),
+    /// Factor of a number
+    #[command(name = "factor")]
+    Factor(factor::Args),
 }
 
 fn main() {
@@ -54,5 +58,6 @@ fn main() {
         Commands::GoStruct(args) => gostruct::run(args, cli.copy),
         Commands::QRCode(args) => qrcode::run(args),
         Commands::Ports(args) => ports::run(args, cli.copy),
+        Commands::Factor(args) => factor::run(args),
     }
 }
