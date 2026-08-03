@@ -1,3 +1,4 @@
+mod factor;
 mod gostruct;
 mod qrcode;
 mod tconv;
@@ -38,6 +39,10 @@ enum Commands {
     /// Generate QRCode in terminal
     #[command(name = "qrcode")]
     QRCode(qrcode::Args),
+
+    /// Factor of a number
+    #[command(name = "factor")]
+    Factor(factor::Args),
 }
 
 fn main() {
@@ -48,5 +53,6 @@ fn main() {
         Commands::Tconv(args) => tconv::run(args, cli.copy),
         Commands::GoStruct(args) => gostruct::run(args, cli.copy),
         Commands::QRCode(args) => qrcode::run(args),
+        Commands::Factor(args) => factor::run(args),
     }
 }
