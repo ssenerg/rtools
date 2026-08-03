@@ -1,5 +1,6 @@
 mod factor;
 mod gostruct;
+mod ports;
 mod qrcode;
 mod tconv;
 mod utils;
@@ -40,6 +41,9 @@ enum Commands {
     #[command(name = "qrcode")]
     QRCode(qrcode::Args),
 
+    /// View active listening ports and kill them
+    #[command(name = "ports")]
+    Ports(ports::Args),
     /// Factor of a number
     #[command(name = "factor")]
     Factor(factor::Args),
@@ -53,6 +57,7 @@ fn main() {
         Commands::Tconv(args) => tconv::run(args, cli.copy),
         Commands::GoStruct(args) => gostruct::run(args, cli.copy),
         Commands::QRCode(args) => qrcode::run(args),
+        Commands::Ports(args) => ports::run(args, cli.copy),
         Commands::Factor(args) => factor::run(args),
     }
 }
