@@ -416,10 +416,7 @@ impl App {
             let hint = if self.selected.is_empty() {
                 "↑/↓ move · space select · k kill · K force-kill".to_string()
             } else {
-                format!(
-                    "{} selected · k kill · K force-kill",
-                    self.selected.len()
-                )
+                format!("{} selected · k kill · K force-kill", self.selected.len())
             };
             lines.push(format!(
                 "{}  {} · r refresh · / filter · q quit{}",
@@ -447,10 +444,28 @@ mod tests {
     #[test]
     fn extracts_ipv4_ipv6_and_wildcard_addresses() {
         let ipv4 = vec![
-            "node", "123", "me", "23u", "IPv4", "0x1", "0t0", "TCP", "127.0.0.1:44950", "(LISTEN)",
+            "node",
+            "123",
+            "me",
+            "23u",
+            "IPv4",
+            "0x1",
+            "0t0",
+            "TCP",
+            "127.0.0.1:44950",
+            "(LISTEN)",
         ];
         let ipv6 = vec![
-            "node", "123", "me", "23u", "IPv6", "0x1", "0t0", "TCP", "[::1]:8080", "(LISTEN)",
+            "node",
+            "123",
+            "me",
+            "23u",
+            "IPv6",
+            "0x1",
+            "0t0",
+            "TCP",
+            "[::1]:8080",
+            "(LISTEN)",
         ];
         let wildcard = vec![
             "node", "123", "me", "23u", "IPv4", "0x1", "0t0", "TCP", "*:7000", "(LISTEN)",
@@ -464,7 +479,15 @@ mod tests {
     #[test]
     fn ignores_rows_without_a_port() {
         let cols = vec![
-            "node", "123", "me", "23u", "IPv4", "0x1", "0t0", "TCP", "no-port-here",
+            "node",
+            "123",
+            "me",
+            "23u",
+            "IPv4",
+            "0x1",
+            "0t0",
+            "TCP",
+            "no-port-here",
         ];
         assert!(listen_address(&cols).is_none());
     }
