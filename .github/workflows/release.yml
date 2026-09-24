@@ -16,7 +16,7 @@ jobs:
     name: Verify version & run tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - name: Check tag matches Cargo.toml version
         run: |
@@ -57,7 +57,7 @@ jobs:
             os: windows-latest
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -70,25 +70,27 @@ jobs:
         run: cargo build --release --locked --target ${{ matrix.target }}
       - name: Package
         shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
-          ARCHIVE="${BIN_NAME}-${VERSION}-${{ matrix.target }}"
+          ARCHIVE="${BIN_NAME}-${VERSION}-${TARGET}"
           mkdir "${ARCHIVE}"
-          if [[ "${{ matrix.target }}" == *windows* ]]; then
-            cp "target/${{ matrix.target }}/release/${BIN_NAME}.exe" "${ARCHIVE}/"
+          if [[ "${TARGET}" == *windows* ]]; then
+            cp "target/${TARGET}/release/${BIN_NAME}.exe" "${ARCHIVE}/"
             powershell -Command "Compress-Archive -Path '${ARCHIVE}' -DestinationPath '${ARCHIVE}.zip'"
             echo "ASSET=${ARCHIVE}.zip" >> "${GITHUB_ENV}"
           else
-            cp "target/${{ matrix.target }}/release/${BIN_NAME}" "${ARCHIVE}/"
+            cp "target/${TARGET}/release/${BIN_NAME}" "${ARCHIVE}/"
             tar czf "${ARCHIVE}.tar.gz" "${ARCHIVE}"
             echo "ASSET=${ARCHIVE}.tar.gz" >> "${GITHUB_ENV}"
           fi
       - name: Attest build provenance
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: ${{ env.ASSET }}
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.ASSET }}
           path: ${{ env.ASSET }}
@@ -101,9 +103,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
