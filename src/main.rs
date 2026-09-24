@@ -1,5 +1,9 @@
+mod enc;
 mod factor;
 mod gostruct;
+mod hash;
+mod jalali;
+mod json;
 mod jwt;
 mod ports;
 mod qrcode;
@@ -55,6 +59,18 @@ enum Commands {
     #[command(name = "jwt")]
     Jwt(jwt::Args),
 
+    /// Hash text or files, or check them against a checksum file
+    #[command(name = "hash")]
+    Hash(hash::Args),
+
+    /// Pretty-print, minify, validate and query JSON
+    #[command(name = "json")]
+    Json(json::Args),
+
+    /// Encode or decode base64, base64url, hex and URL encoding
+    #[command(name = "enc")]
+    Enc(enc::Args),
+
     /// Update rtools to the latest release
     #[command(name = "update")]
     Update(update::Args),
@@ -77,6 +93,9 @@ fn main() {
         Commands::Ports(args) => ports::run(args, cli.copy),
         Commands::Factor(args) => factor::run(args),
         Commands::Jwt(args) => jwt::run(args, cli.copy),
+        Commands::Hash(args) => hash::run(args, cli.copy),
+        Commands::Json(args) => json::run(args, cli.copy),
+        Commands::Enc(args) => enc::run(args, cli.copy),
         Commands::Update(args) => update::run(args),
     }
 

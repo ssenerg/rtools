@@ -31,3 +31,8 @@ pub fn read_stdin_or_file(input_file: &Option<String>) -> Result<String, String>
         Ok(buffer)
     }
 }
+
+/// Lowercase hex, as checksums are usually written.
+pub fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
