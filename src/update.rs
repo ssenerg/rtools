@@ -11,8 +11,10 @@ use std::process::{Command, Stdio, exit};
 use std::sync::mpsc::{self, Receiver};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
-use ureq::ResponseExt;
+use ureq::config::ConfigBuilder;
+use ureq::http::{Method, header};
 use ureq::tls::{RootCerts, TlsConfig};
+use ureq::typestate::AgentScope;
 
 /// The GitHub repository releases are published to.
 const REPO: &str = "ssenerg/rtools";
@@ -404,17 +406,68 @@ impl Release {
 }
 
 fn agent(timeout: Duration) -> ureq::Agent {
+    agent_config(timeout).build().into()
+}
+
+fn agent_config(timeout: Duration) -> ConfigBuilder<AgentScope> {
     ureq::Agent::config_builder()
         .timeout_global(Some(timeout))
         .user_agent(USER_AGENT)
+        // `fetch()` follows redirects instead: ureq's own handling takes a redirect
+        // as soon as its Location header arrives and then misreads the remaining
+        // headers as the body. github.com's run to ~5 KB, and on a slow link or
+        // through a TLS-inspecting proxy they do arrive in pieces.
+        .max_redirects(0)
         // The OS certificate store, so proxies and antivirus the system trusts keep working.
         .tls_config(
             TlsConfig::builder()
                 .root_certs(RootCerts::PlatformVerifier)
                 .build(),
         )
-        .build()
-        .into()
+}
+
+/// Send a GET or HEAD to `url`, following redirects, and return the final URL
+/// with its response.
+fn fetch(
+    agent: &ureq::Agent,
+    method: Method,
+    url: &str,
+) -> Result<(String, ureq::http::Response<ureq::Body>), ureq::Error> {
+    let mut url = url.to_string();
+    // GitHub needs at most two: a renamed repository, then its download CDN.
+    for _ in 0..=5 {
+        let response = if method == Method::HEAD {
+            agent.head(&url).call()?
+        } else {
+            agent.get(&url).call()?
+        };
+        let location = response
+            .headers()
+            .get(header::LOCATION)
+            .and_then(|location| location.to_str().ok())
+            .filter(|_| response.status().is_redirection());
+        let Some(location) = location else {
+            return Ok((url, response));
+        };
+        url = redirect_target(&url, location).ok_or(ureq::Error::RedirectFailed)?;
+    }
+    Err(ureq::Error::TooManyRedirects)
+}
+
+/// Where a redirect from `from` to `location` leads, which may be a path on the
+/// same host. `None` if it would drop https.
+fn redirect_target(from: &str, location: &str) -> Option<String> {
+    let to = if location.starts_with('/') && !location.starts_with("//") {
+        let origin: ureq::http::Uri = from.parse().ok()?;
+        format!(
+            "{}://{}{location}",
+            origin.scheme_str()?,
+            origin.authority()?
+        )
+    } else {
+        location.to_string()
+    };
+    (!from.starts_with("https://") || to.starts_with("https://")).then_some(to)
 }
 
 /// The newest non-prerelease release, found through github.com's documented
@@ -422,13 +475,11 @@ fn agent(timeout: Duration) -> ureq::Agent {
 /// REST API, it has no 60-requests-an-hour limit per IP to share with everyone
 /// else behind the same office or carrier NAT.
 fn fetch_latest(agent: &ureq::Agent) -> Result<Release, String> {
-    let response = agent
-        .head(format!("https://github.com/{REPO}/releases/latest"))
-        .call()
-        .map_err(|e| format!("failed to reach GitHub: {e}"))?;
+    let url = format!("https://github.com/{REPO}/releases/latest");
+    let (url, _) =
+        fetch(agent, Method::HEAD, &url).map_err(|e| format!("failed to reach GitHub: {e}"))?;
     // Without any release, the link lands on the release list instead.
-    let tag = tag_from_url(&response.get_uri().to_string())
-        .ok_or("no rtools release has been published yet")?;
+    let tag = tag_from_url(&url).ok_or("no rtools release has been published yet")?;
     Ok(Release { tag })
 }
 
@@ -439,15 +490,14 @@ fn tag_from_url(url: &str) -> Option<String> {
     (!tag.is_empty()).then(|| tag.to_string())
 }
 
-/// GitHub answers asset links with a redirect to its CDN, which ureq follows.
+/// GitHub answers asset links with a redirect to its CDN.
 fn fetch_asset(
     agent: &ureq::Agent,
     release: &Release,
     name: &str,
 ) -> Result<ureq::http::Response<ureq::Body>, String> {
-    agent
-        .get(release.asset_url(name))
-        .call()
+    fetch(agent, Method::GET, &release.asset_url(name))
+        .map(|(_, response)| response)
         .map_err(|e| match e {
             ureq::Error::StatusCode(404) => format!("release {} has no {name}", release.tag),
             e => format!("failed to download {name}: {e}"),
@@ -818,6 +868,70 @@ mod tests {
             release.asset_url("SHA256SUMS"),
             "https://github.com/ssenerg/rtools/releases/download/v0.2.0/SHA256SUMS"
         );
+    }
+
+    #[test]
+    fn resolves_redirect_targets() {
+        let from = "https://github.com/ssenerg/rtools/releases/latest";
+        let tag = "https://github.com/ssenerg/rtools/releases/tag/v1.0.0";
+        assert_eq!(redirect_target(from, tag).as_deref(), Some(tag));
+        assert_eq!(
+            redirect_target(from, "/ssenerg/rtools/releases").as_deref(),
+            Some("https://github.com/ssenerg/rtools/releases")
+        );
+        assert_eq!(
+            redirect_target("http://127.0.0.1:8765/a", "/b").as_deref(),
+            Some("http://127.0.0.1:8765/b")
+        );
+        assert_eq!(redirect_target(from, "http://github.com/plain"), None);
+    }
+
+    #[test]
+    fn follows_redirects_whose_headers_arrive_in_pieces() {
+        use std::io::{BufRead, BufReader};
+        use std::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let target = format!("{base}/cdn/file");
+        let location = target.clone();
+        thread::spawn(move || {
+            for stream in listener.incoming().take(2) {
+                let mut stream = stream.unwrap();
+                let mut request = BufReader::new(stream.try_clone().unwrap());
+                let mut first_line = String::new();
+                request.read_line(&mut first_line).unwrap();
+                let mut line = String::new();
+                while request.read_line(&mut line).unwrap() > 2 {
+                    line.clear();
+                }
+                if first_line.contains("/cdn/file") {
+                    stream
+                        .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhello")
+                        .unwrap();
+                } else {
+                    // Location first, the rest of the headers and the empty body later.
+                    write!(
+                        stream,
+                        "HTTP/1.1 302 Found\r\nTransfer-Encoding: chunked\r\nLocation: {location}\r\n"
+                    )
+                    .unwrap();
+                    stream.flush().unwrap();
+                    thread::sleep(Duration::from_millis(100));
+                    stream
+                        .write_all(b"Content-Type: text/html\r\nConnection: close\r\n\r\n0\r\n\r\n")
+                        .unwrap();
+                }
+            }
+        });
+
+        let agent: ureq::Agent = agent_config(Duration::from_secs(10))
+            .proxy(None)
+            .build()
+            .into();
+        let (url, mut response) = fetch(&agent, Method::GET, &format!("{base}/download")).unwrap();
+        assert_eq!(url, target);
+        assert_eq!(response.body_mut().read_to_string().unwrap(), "hello");
     }
 
     #[test]
