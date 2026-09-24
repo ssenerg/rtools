@@ -40,6 +40,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # Installed copies update themselves from these (src/update.rs): keep the
+        # targets, the archive names from "Package" and SHA256SUMS in sync with it.
         include:
           - target: x86_64-unknown-linux-musl
             os: ubuntu-24.04

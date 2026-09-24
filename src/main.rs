@@ -3,6 +3,7 @@ mod gostruct;
 mod ports;
 mod qrcode;
 mod tconv;
+mod update;
 mod utils;
 mod uuidgen;
 
@@ -47,10 +48,20 @@ enum Commands {
     /// Factor of a number
     #[command(name = "factor")]
     Factor(factor::Args),
+
+    /// Update rtools to the latest release
+    #[command(name = "update")]
+    Update(update::Args),
 }
 
 fn main() {
     let cli = Cli::parse();
+
+    // `update` talks to GitHub itself; every other command gets the background check.
+    let update_check = match cli.command {
+        Commands::Update(_) => None,
+        _ => update::BackgroundCheck::start(),
+    };
 
     match &cli.command {
         Commands::UuidGen(args) => uuidgen::run(args, cli.copy),
@@ -59,5 +70,10 @@ fn main() {
         Commands::QRCode(args) => qrcode::run(args),
         Commands::Ports(args) => ports::run(args, cli.copy),
         Commands::Factor(args) => factor::run(args),
+        Commands::Update(args) => update::run(args),
+    }
+
+    if let Some(check) = update_check {
+        check.finish();
     }
 }
