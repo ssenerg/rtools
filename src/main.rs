@@ -1,5 +1,6 @@
 mod factor;
 mod gostruct;
+mod jwt;
 mod ports;
 mod qrcode;
 mod tconv;
@@ -20,6 +21,7 @@ struct Cli {
     #[command(subcommand)]
     command: Commands,
 
+    /// Copy the output to the clipboard
     #[arg(short = 'c', long = "copy", global = true)]
     copy: bool,
 }
@@ -49,6 +51,10 @@ enum Commands {
     #[command(name = "factor")]
     Factor(factor::Args),
 
+    /// Decode, verify and create JSON Web Tokens
+    #[command(name = "jwt")]
+    Jwt(jwt::Args),
+
     /// Update rtools to the latest release
     #[command(name = "update")]
     Update(update::Args),
@@ -70,6 +76,7 @@ fn main() {
         Commands::QRCode(args) => qrcode::run(args),
         Commands::Ports(args) => ports::run(args, cli.copy),
         Commands::Factor(args) => factor::run(args),
+        Commands::Jwt(args) => jwt::run(args, cli.copy),
         Commands::Update(args) => update::run(args),
     }
 

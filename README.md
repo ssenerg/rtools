@@ -99,9 +99,36 @@ rtools replaces its own binary, so keep it somewhere you can write to, like
 `~/.local/bin` above. Otherwise updating needs `sudo rtools update`, or on
 Windows an administrator terminal.
 
-## Usage
+## Commands
+
+| Command    | What it does                                            |
+| ---------- | ------------------------------------------------------- |
+| `uuid`     | Generate UUIDs (versions 1 and 3–8)                     |
+| `tconv`    | Convert between Unix timestamps, ISO 8601 and dates     |
+| `gostruct` | Generate a Go struct from JSON                          |
+| `qrcode`   | Show text as a QR code in the terminal                  |
+| `ports`    | List listening ports and kill the processes behind them |
+| `factor`   | Factor a number into primes                             |
+| `jwt`      | Decode, verify and create JSON Web Tokens               |
+| `update`   | Update rtools to the latest release                     |
+
+`rtools <command> --help` shows the details. Most commands take `-c` to copy
+their output to the clipboard.
+
+### JWT
 
 ```sh
-rtools --help
-rtools <command> --help
+# Show a token's header, payload and times. With a secret, also check its signature.
+rtools jwt decode eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+rtools jwt decode --secret "$JWT_SECRET" < token.txt
+
+# Only the payload, for scripts. Exits with 1 if the signature doesn't match.
+rtools jwt decode -p --secret-file secret.txt "$TOKEN" | jq .sub
+
+# Create a token that expires in 15 minutes.
+rtools jwt encode '{"sub":"42","role":"admin"}' --secret-file secret.txt --exp 15m --iat
 ```
+
+Tokens are signed and checked with a shared secret (HS256, HS384 or HS512).
+Tokens signed with a private key, like RS256 or ES256, can be decoded but not
+checked.
