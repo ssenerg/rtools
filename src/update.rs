@@ -1,3 +1,4 @@
+use crate::utils;
 use clap::{Parser, ValueEnum};
 use semver::Version;
 use serde::{Deserialize, Serialize};
@@ -672,11 +673,7 @@ fn download(
         file.write_all(&buf[..n]).map_err(|e| fail(&e))?;
         progress.advance(n);
     }
-    Ok(hex(&hasher.finalize()))
-}
-
-fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    Ok(utils::hex(&hasher.finalize()))
 }
 
 /// `Downloading <file> (1.9 MB) 42%` on one stderr line, ended when dropped.
@@ -952,7 +949,7 @@ mod tests {
     #[test]
     fn hashes_as_lowercase_hex() {
         assert_eq!(
-            hex(&Sha256::digest(b"")),
+            utils::hex(&Sha256::digest(b"")),
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
         );
     }
