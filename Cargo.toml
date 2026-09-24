@@ -13,6 +13,21 @@ qrcode = { version = "0.14", default-features = false }
 terminal_size = "0.4"
 chrono-humanize = "0.2"
 crossterm = "0.29"
+ureq = { version = "3.4.2", default-features = false, features = ["rustls", "platform-verifier", "win-system-proxy"] }
+serde = { version = "1.0.229", features = ["derive"] }
+semver = "1.0.28"
+sha2 = "0.11.0"
+tempfile = "3.27.0"
+
+# Release archives are .tar.gz, except on Windows where they are .zip.
+[target.'cfg(not(windows))'.dependencies]
+flate2 = "1.1.10"
+tar = { version = "0.4.46", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+zip = { version = "8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+# Deletes the replaced .exe, which Windows keeps locked until rtools exits.
+self-replace = "1.5.0"
 
 [profile.release]
 codegen-units = 1
