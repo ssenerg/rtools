@@ -5,57 +5,33 @@ JSON, QR codes, listening ports and more.
 
 ## Install
 
-Every [release](https://github.com/ssenerg/rtools/releases/latest) has prebuilt
-binaries for Linux, macOS and Windows, on both x86_64 and ARM64. The commands
-below install the latest one.
-
-### Linux and macOS
+Linux and macOS:
 
 ```sh
-case "$(uname -s)-$(uname -m)" in
-  Linux-x86_64)                TARGET=x86_64-unknown-linux-musl ;;
-  Linux-aarch64 | Linux-arm64) TARGET=aarch64-unknown-linux-musl ;;
-  Darwin-arm64)                TARGET=aarch64-apple-darwin ;;
-  Darwin-x86_64)               TARGET=x86_64-apple-darwin ;;
-  *) echo "No prebuilt rtools for $(uname -sm), see 'From source' below." ;;
-esac
-VERSION=$(curl -fsSLo /dev/null -w '%{url_effective}' https://github.com/ssenerg/rtools/releases/latest)
-VERSION=${VERSION##*/v}
-curl -fsSL "https://github.com/ssenerg/rtools/releases/download/v$VERSION/rtools-$VERSION-$TARGET.tar.gz" | tar xz
-mkdir -p ~/.local/bin
-mv "rtools-$VERSION-$TARGET/rtools" ~/.local/bin/
-rmdir "rtools-$VERSION-$TARGET"
-rtools --version
+curl -fsSL https://raw.githubusercontent.com/ssenerg/rtools/main/install.sh | sh
 ```
 
-If the last line says `rtools: command not found`, add `~/.local/bin` to your
-`PATH`. With zsh, the macOS default, that is:
-
-```sh
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
-```
-
-Then open a new terminal.
-
-### Windows
-
-In PowerShell:
+Windows, in PowerShell:
 
 ```powershell
-$Target  = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "aarch64-pc-windows-msvc" } else { "x86_64-pc-windows-msvc" }
-$Version = (Invoke-RestMethod https://api.github.com/repos/ssenerg/rtools/releases/latest).tag_name.TrimStart("v")
-$Dir     = "$env:LOCALAPPDATA\Programs\rtools"
-$Zip     = "$env:TEMP\rtools.zip"
-Invoke-WebRequest "https://github.com/ssenerg/rtools/releases/download/v$Version/rtools-$Version-$Target.zip" -OutFile $Zip
-Expand-Archive $Zip "$env:TEMP\rtools" -Force
-New-Item -ItemType Directory -Force $Dir | Out-Null
-Move-Item "$env:TEMP\rtools\rtools-$Version-$Target\rtools.exe" $Dir -Force
-Remove-Item $Zip, "$env:TEMP\rtools" -Recurse -Force
-$UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
-if ($UserPath -notlike "*$Dir*") { [Environment]::SetEnvironmentVariable("Path", "$UserPath;$Dir", "User") }
+irm https://raw.githubusercontent.com/ssenerg/rtools/main/install.ps1 | iex
 ```
 
-Then open a new terminal and run `rtools --version`.
+The scripts ([install.sh](install.sh), [install.ps1](install.ps1)) download the
+latest release for your platform, check it against the release's `SHA256SUMS`
+and install it into a folder you own, so rtools can update itself without admin
+rights: `~/.local/bin`, or `%LOCALAPPDATA%\Programs\rtools` on Windows, which
+they add to your `PATH`. `RTOOLS_VERSION` picks a version and
+`RTOOLS_INSTALL_DIR` the folder:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/ssenerg/rtools/main/install.sh | RTOOLS_VERSION=0.2.0 sh
+```
+
+To install by hand instead, download the archive for your platform from the
+[latest release](https://github.com/ssenerg/rtools/releases/latest) (Linux,
+macOS and Windows, on x86_64 and ARM64), check it against `SHA256SUMS`, and put
+`rtools` (`rtools.exe` on Windows) in a folder on your `PATH`.
 
 ### From source
 
@@ -101,16 +77,19 @@ Windows an administrator terminal.
 
 ## Commands
 
-| Command    | What it does                                            |
-| ---------- | ------------------------------------------------------- |
-| `uuid`     | Generate UUIDs (versions 1 and 3–8)                     |
-| `tconv`    | Convert between Unix timestamps, ISO 8601 and dates     |
-| `gostruct` | Generate a Go struct from JSON                          |
-| `qrcode`   | Show text as a QR code in the terminal                  |
-| `ports`    | List listening ports and kill the processes behind them |
-| `factor`   | Factor a number into primes                             |
-| `jwt`      | Decode, verify and create JSON Web Tokens               |
-| `update`   | Update rtools to the latest release                     |
+| Command    | What it does                                                             |
+| ---------- | ------------------------------------------------------------------------ |
+| `uuid`     | Generate UUIDs (versions 1 and 3–8)                                      |
+| `tconv`    | Convert between Unix timestamps, ISO 8601, dates and the Jalali calendar |
+| `gostruct` | Generate a Go struct from JSON                                           |
+| `qrcode`   | Show text as a QR code in the terminal                                   |
+| `ports`    | List listening ports and kill the processes behind them                  |
+| `factor`   | Factor a number into primes                                              |
+| `jwt`      | Decode, verify and create JSON Web Tokens                                |
+| `hash`     | Hash text or files, or check them against a checksum file                |
+| `json`     | Pretty-print, minify, validate and query JSON                            |
+| `enc`      | Encode or decode base64, base64url, hex and URL encoding                 |
+| `update`   | Update rtools to the latest release                                      |
 
 `rtools <command> --help` shows the details. Most commands take `-c` to copy
 their output to the clipboard.
@@ -132,3 +111,21 @@ rtools jwt encode '{"sub":"42","role":"admin"}' --secret-file secret.txt --exp 1
 Tokens are signed and checked with a shared secret (HS256, HS384 or HS512).
 Tokens signed with a private key, like RS256 or ES256, can be decoded but not
 checked.
+
+### More examples
+
+```sh
+rtools hash rtools-0.3.0-x86_64-unknown-linux-musl.tar.gz   # sha256, like sha256sum
+rtools hash --check SHA256SUMS         # check the downloads a checksum file lists
+rtools hash -a md5 --text hello        # a string, without echo's newline
+
+curl -s https://api.example.com/users | rtools json -q '.[0].email' -r
+rtools json config.json --sort-keys    # invalid JSON points at the exact line and column
+
+rtools enc base64 'hello world'        # aGVsbG8gd29ybGQ=
+rtools enc url -d 'a%20b%26c'          # a b&c
+rtools enc hex -i logo.png             # a file's exact bytes
+
+rtools tconv now                       # includes the date in the Jalali calendar
+rtools tconv --jalali 1403/07/02       # read a Jalali date
+```
