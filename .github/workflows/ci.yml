@@ -20,7 +20,7 @@ jobs:
     name: Format & lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -40,8 +40,14 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       - uses: Swatinem/rust-cache@v2
+      # Linux is linted in the lint job; this catches Windows- and macOS-only code.
+      - name: cargo clippy
+        if: runner.os != 'Linux'
+        run: cargo clippy --all-targets --all-features --locked -- -D warnings
       - name: cargo test
         run: cargo test --all-features --locked
