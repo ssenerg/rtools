@@ -1,12 +1,17 @@
 use arboard::Clipboard;
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
 
 pub fn emit(text: &str, copy: bool) -> Result<(), String> {
     if text.is_empty() {
         return Ok(());
     }
-    println!("{text}");
+    // A reader that stops early, like `| head`, isn't an error.
+    if let Err(e) = writeln!(io::stdout(), "{text}")
+        && e.kind() != io::ErrorKind::BrokenPipe
+    {
+        return Err(format!("failed to write the output: {e}"));
+    }
     if copy {
         copy_to_clipboard(text)?;
     }
