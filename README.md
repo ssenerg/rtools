@@ -97,21 +97,21 @@ terminal opens, so it keeps up as rtools updates.
 
 ## Commands
 
-| Command       | What it does                                                             |
-| ------------- | ------------------------------------------------------------------------ |
-| `uuid`        | Generate UUIDs (versions 1 and 3–8)                                      |
-| `tconv`       | Convert between Unix timestamps, ISO 8601, dates and the Jalali calendar |
-| `gostruct`    | Generate a Go struct from JSON                                           |
-| `qrcode`      | Show text as a QR code in the terminal                                   |
-| `ports`       | List listening ports and kill the processes behind them                  |
-| `factor`      | Factor a number into primes                                              |
-| `jwt`         | Decode, verify and create JSON Web Tokens                                |
-| `hash`        | Hash text or files, or check them against a checksum file                |
-| `json`        | Pretty-print, minify, validate and query JSON                            |
-| `enc`         | Encode or decode base64, base64url, hex and URL encoding                 |
-| `cron`        | Explain a cron schedule in plain English and list when it runs next      |
-| `completions` | Print the script that makes Tab complete rtools commands                 |
-| `update`      | Update rtools to the latest release                                      |
+| Command       | What it does                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------- |
+| `uuid`        | Generate UUIDs (versions 1 and 3–8)                                                         |
+| `tconv`       | Convert times between timestamps, dates, time zones and the Jalali calendar, with date math |
+| `gostruct`    | Generate a Go struct from JSON                                                              |
+| `qrcode`      | Show text as a QR code in the terminal                                                      |
+| `ports`       | List listening ports and kill the processes behind them                                     |
+| `factor`      | Factor a number into primes                                                                 |
+| `jwt`         | Decode, verify and create JSON Web Tokens                                                   |
+| `hash`        | Hash text or files, or check them against a checksum file                                   |
+| `json`        | Pretty-print, minify, validate and query JSON                                               |
+| `enc`         | Encode or decode base64, base64url, hex and URL encoding                                    |
+| `cron`        | Explain a cron schedule in plain English and list when it runs next                         |
+| `completions` | Print the script that makes Tab complete rtools commands                                    |
+| `update`      | Update rtools to the latest release                                                         |
 
 `rtools <command> --help` shows the details. Most commands take `-c` to copy
 their output to the clipboard.
@@ -133,6 +133,33 @@ rtools jwt encode '{"sub":"42","role":"admin"}' --secret-file secret.txt --exp 1
 Tokens are signed and checked with a shared secret (HS256, HS384 or HS512).
 Tokens signed with a private key, like RS256 or ES256, can be decoded but not
 checked.
+
+### Time
+
+```sh
+$ rtools tconv 'tomorrow + 9h' --tz Asia/Tehran --tz Europe/Berlin
+Input
+  tomorrow + 9h
+
+UTC
+  2026-09-26 05:30:00 UTC
+
+Asia/Tehran
+  2026-09-26 09:00:00 +03:30
+
+Europe/Berlin
+  2026-09-26 07:30:00 +02:00 CEST
+...
+```
+
+- The input can be a Unix timestamp (seconds through nanoseconds), an ISO 8601
+  date, `2026-03-20 09:00`, a Jalali date with `-j`, or `now`, `today`,
+  `tomorrow` and `yesterday`.
+- `--tz` shows the time in that zone; repeat it for several. Dates without an
+  offset, and `today`, are read in the first zone instead of your own.
+- Date math adds or subtracts durations: `now + 90m`, `2026-01-01 - 2d`,
+  `-1w`, `now + 1y 6mo`. Days, months and years follow the calendar, so `+ 1d`
+  keeps the time of day across a daylight-saving change.
 
 ### Cron
 
@@ -178,6 +205,9 @@ rtools enc hex -i logo.png             # a file's exact bytes
 
 rtools tconv now                       # includes the date in the Jalali calendar
 rtools tconv --jalali 1403/07/02       # read a Jalali date
+rtools tconv -j '1405/01/01 - 1d'      # the day before Nowruz
+rtools tconv 1790000000 --tz America/New_York
+rtools tconv '2026-03-20 09:00' --tz Europe/Berlin   # 09:00 in Berlin, in UTC and your time
 
 rtools cron @weekly -n 10              # the next 10 runs
 rtools cron 'CRON_TZ=Asia/Tehran 0 9 * * *'

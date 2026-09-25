@@ -3,10 +3,11 @@
 //! day fields combine.
 
 use crate::utils;
-use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, Timelike, Utc};
+use crate::zones::{self, Zone, wall_time};
+use chrono::{DateTime, Datelike, Duration, NaiveDate, NaiveDateTime, Utc};
 use chrono_humanize::HumanTime;
 use clap::Parser;
-use jiff::tz::{AmbiguousOffset, Offset, TimeZone as Zone};
+use jiff::tz::{AmbiguousOffset, Offset};
 use std::io::{self, IsTerminal, Read};
 use std::process::exit;
 
@@ -39,7 +40,7 @@ pub struct Args {
 const SEARCH_DAYS: usize = 100 * 366;
 
 pub fn run(args: &Args, copy: bool) {
-    let zone = match args.tz.as_deref().map(parse_zone).transpose() {
+    let zone = match args.tz.as_deref().map(zones::parse).transpose() {
         Ok(zone) => zone,
         Err(e) => fail(&e),
     };
@@ -81,17 +82,6 @@ fn fail(message: &str) -> ! {
     exit(1);
 }
 
-/// A time zone from the system's time zone database (bundled on Windows).
-fn parse_zone(name: &str) -> Result<Zone, String> {
-    Zone::get(name).map_err(|_| {
-        format!("unknown time zone {name:?}. Use a name like UTC, Europe/Berlin or Asia/Tehran")
-    })
-}
-
-fn zone_name(zone: &Zone) -> &str {
-    zone.iana_name().unwrap_or("the given time zone")
-}
-
 /// The instants a wall-clock time is in a time zone.
 enum Resolved {
     One(DateTime<Utc>),
@@ -102,24 +92,13 @@ enum Resolved {
 }
 
 fn resolve(zone: &Zone, wall: NaiveDateTime) -> Resolved {
-    let civil = jiff::civil::date(wall.year() as i16, wall.month() as i8, wall.day() as i8).at(
-        wall.hour() as i8,
-        wall.minute() as i8,
-        0,
-        0,
-    );
+    let civil = zones::civil(wall).expect("a date within jiff's range");
     let at = |offset: Offset| wall.and_utc() - Duration::seconds(offset.seconds().into());
     match zone.to_ambiguous_timestamp(civil).offset() {
         AmbiguousOffset::Unambiguous { offset } => Resolved::One(at(offset)),
         AmbiguousOffset::Fold { before, after } => Resolved::Twice(at(before), at(after)),
         AmbiguousOffset::Gap { .. } => Resolved::Skipped,
     }
-}
-
-/// The wall-clock time of an instant in a time zone.
-fn wall_time(zone: &Zone, at: DateTime<Utc>) -> NaiveDateTime {
-    let timestamp = jiff::Timestamp::from_second(at.timestamp()).expect("a time in range");
-    at.naive_utc() + Duration::seconds(zone.to_offset(timestamp).seconds().into())
 }
 
 // ---------------------------------------------------------------------------
@@ -508,7 +487,7 @@ fn parse_entry(line: &str, zone: Option<Zone>) -> Result<Entry, String> {
     for prefix in ["CRON_TZ=", "TZ="] {
         if let Some(rest) = line.strip_prefix(prefix) {
             let (name, rest) = split_fields(rest, 1);
-            zone = Some(parse_zone(name.first().copied().unwrap_or_default())?);
+            zone = Some(zones::parse(name.first().copied().unwrap_or_default())?);
             line = rest;
             break;
         }
@@ -1092,7 +1071,7 @@ fn render_entry(entry: &Entry, local: &Zone, count: usize, now: DateTime<Utc>) -
     let zone = entry
         .zone
         .as_ref()
-        .map(|tz| format!(" ({})", zone_name(tz)))
+        .map(|tz| format!(" ({})", zones::name(tz)))
         .unwrap_or_default();
     let Some(schedule) = &entry.schedule else {
         let mut out = "Schedule\n  At startup, when the cron daemon starts".to_string();
@@ -1165,7 +1144,7 @@ fn render_crontab(
             if !prefixed {
                 if name == "CRON_TZ" {
                     // Applies to the lines below it, as in cronie.
-                    match parse_zone(value) {
+                    match zones::parse(value) {
                         Ok(tz) => zone = Some(tz),
                         Err(e) => entries.push((line, Err(e))),
                     }
@@ -1203,7 +1182,7 @@ fn render_crontab(
             } else if let Some((wall, at)) = upcoming(entry, schedule, local, 1, now).first() {
                 let mut next = wall.format(TIME_FORMAT).to_string();
                 if let Some(tz) = &entry.zone {
-                    next = format!("{next} {}", zone_name(tz));
+                    next = format!("{next} {}", zones::name(tz));
                 }
                 if differs_from_local(entry, local, &[(*wall, *at)]) {
                     next = format!(
@@ -1328,7 +1307,7 @@ mod tests {
         );
 
         let entry = parse_entry("CRON_TZ=asia/tehran 0 9 * * *", None).unwrap();
-        assert_eq!(entry.zone.as_ref().map(zone_name), Some("Asia/Tehran"));
+        assert_eq!(entry.zone.as_ref().map(zones::name), Some("Asia/Tehran"));
         assert!(entry.command.is_none());
 
         let entry = parse_entry("@reboot /usr/bin/start", None).unwrap();
@@ -1354,11 +1333,11 @@ mod tests {
 
     #[test]
     fn finds_time_zones_in_any_case() {
-        let name = |text: &str| parse_zone(text).map(|zone| zone_name(&zone).to_string());
+        let name = |text: &str| zones::parse(text).map(|zone| zones::name(&zone).to_string());
         assert_eq!(name("Asia/Tehran").as_deref(), Ok("Asia/Tehran"));
         assert_eq!(name("asia/tehran").as_deref(), Ok("Asia/Tehran"));
         assert_eq!(name("utc").as_deref(), Ok("UTC"));
-        assert!(parse_zone("Nowhere").is_err());
+        assert!(zones::parse("Nowhere").is_err());
     }
 
     #[test]

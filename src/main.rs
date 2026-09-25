@@ -13,6 +13,7 @@ mod tconv;
 mod update;
 mod utils;
 mod uuidgen;
+mod zones;
 
 use clap::{Parser, Subcommand};
 
@@ -38,7 +39,7 @@ enum Commands {
     #[command(name = "uuid")]
     UuidGen(uuidgen::UuidGenArgs),
 
-    /// Work with time
+    /// Convert times between timestamps, dates and time zones, with date math
     #[command(name = "tconv")]
     Tconv(tconv::Args),
 
