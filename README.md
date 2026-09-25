@@ -1,7 +1,7 @@
 # rtools
 
-Small developer tools in one binary: UUIDs, time conversion, Go structs from
-JSON, QR codes, listening ports and more.
+Small developer tools in one binary: UUIDs, time conversion, JWTs, hashes,
+JSON, cron schedules, Go structs from JSON, QR codes, listening ports and more.
 
 ## Install
 
@@ -75,21 +75,43 @@ rtools replaces its own binary, so keep it somewhere you can write to, like
 `~/.local/bin` above. Otherwise updating needs `sudo rtools update`, or on
 Windows an administrator terminal.
 
+## Tab completion
+
+`rtools completions` prints a script that makes Tab complete rtools' commands
+and options. To load it in every new terminal, run the line for your shell once:
+
+```sh
+echo 'eval "$(rtools completions bash)"' >> ~/.bashrc                  # bash
+echo 'eval "$(rtools completions zsh)"' >> ~/.zshrc                    # zsh
+echo 'rtools completions fish | source' >> ~/.config/fish/config.fish  # fish
+```
+
+```powershell
+if (!(Test-Path $PROFILE)) { New-Item -Force $PROFILE | Out-Null }
+Add-Content $PROFILE 'rtools completions powershell | Out-String | Invoke-Expression'
+```
+
+Then open a new terminal. In zsh the line needs to come after `compinit`, which
+oh-my-zsh and most setups already run. The script is made fresh each time a
+terminal opens, so it keeps up as rtools updates.
+
 ## Commands
 
-| Command    | What it does                                                             |
-| ---------- | ------------------------------------------------------------------------ |
-| `uuid`     | Generate UUIDs (versions 1 and 3–8)                                      |
-| `tconv`    | Convert between Unix timestamps, ISO 8601, dates and the Jalali calendar |
-| `gostruct` | Generate a Go struct from JSON                                           |
-| `qrcode`   | Show text as a QR code in the terminal                                   |
-| `ports`    | List listening ports and kill the processes behind them                  |
-| `factor`   | Factor a number into primes                                              |
-| `jwt`      | Decode, verify and create JSON Web Tokens                                |
-| `hash`     | Hash text or files, or check them against a checksum file                |
-| `json`     | Pretty-print, minify, validate and query JSON                            |
-| `enc`      | Encode or decode base64, base64url, hex and URL encoding                 |
-| `update`   | Update rtools to the latest release                                      |
+| Command       | What it does                                                             |
+| ------------- | ------------------------------------------------------------------------ |
+| `uuid`        | Generate UUIDs (versions 1 and 3–8)                                      |
+| `tconv`       | Convert between Unix timestamps, ISO 8601, dates and the Jalali calendar |
+| `gostruct`    | Generate a Go struct from JSON                                           |
+| `qrcode`      | Show text as a QR code in the terminal                                   |
+| `ports`       | List listening ports and kill the processes behind them                  |
+| `factor`      | Factor a number into primes                                              |
+| `jwt`         | Decode, verify and create JSON Web Tokens                                |
+| `hash`        | Hash text or files, or check them against a checksum file                |
+| `json`        | Pretty-print, minify, validate and query JSON                            |
+| `enc`         | Encode or decode base64, base64url, hex and URL encoding                 |
+| `cron`        | Explain a cron schedule in plain English and list when it runs next      |
+| `completions` | Print the script that makes Tab complete rtools commands                 |
+| `update`      | Update rtools to the latest release                                      |
 
 `rtools <command> --help` shows the details. Most commands take `-c` to copy
 their output to the clipboard.
@@ -112,6 +134,34 @@ Tokens are signed and checked with a shared secret (HS256, HS384 or HS512).
 Tokens signed with a private key, like RS256 or ES256, can be decoded but not
 checked.
 
+### Cron
+
+```sh
+$ rtools cron '*/15 9-17 * * 1-5'
+Schedule
+  Every 15 minutes, from 09:00 through 17:45, Monday through Friday
+
+Next runs
+  Fri 2026-09-25 09:00  in 9 hours
+  Fri 2026-09-25 09:15
+  ...
+```
+
+- `--tz` names the time zone the schedule runs in, like `--tz UTC` for GitHub
+  Actions and most Kubernetes clusters. The runs are then shown in your time
+  too.
+- `crontab -l | rtools cron` explains every line of your crontab, including
+  `CRON_TZ` lines.
+- It points out common mistakes. Setting both the day of month and the weekday
+  runs on days that match *either* one. `*/7` minutes restarts every hour.
+  There's no February 30th. And Linux cron and Kubernetes read some schedules
+  differently.
+
+Schedules use the standard five fields (minute, hour, day of month, month, day
+of week) or `@hourly`, `@daily`, `@weekly`, `@monthly`, `@yearly` and `@reboot`,
+and match the way Linux cron (cronie) runs them, including around daylight
+saving changes.
+
 ### More examples
 
 ```sh
@@ -128,4 +178,7 @@ rtools enc hex -i logo.png             # a file's exact bytes
 
 rtools tconv now                       # includes the date in the Jalali calendar
 rtools tconv --jalali 1403/07/02       # read a Jalali date
+
+rtools cron @weekly -n 10              # the next 10 runs
+rtools cron 'CRON_TZ=Asia/Tehran 0 9 * * *'
 ```

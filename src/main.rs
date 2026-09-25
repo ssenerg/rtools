@@ -1,3 +1,5 @@
+mod completions;
+mod cron;
 mod enc;
 mod factor;
 mod gostruct;
@@ -71,6 +73,14 @@ enum Commands {
     #[command(name = "enc")]
     Enc(enc::Args),
 
+    /// Explain a cron schedule and list when it runs next
+    #[command(name = "cron")]
+    Cron(cron::Args),
+
+    /// Print a shell script that completes rtools commands with Tab
+    #[command(name = "completions")]
+    Completions(completions::Args),
+
     /// Update rtools to the latest release
     #[command(name = "update")]
     Update(update::Args),
@@ -79,9 +89,10 @@ enum Commands {
 fn main() {
     let cli = Cli::parse();
 
-    // `update` talks to GitHub itself; every other command gets the background check.
+    // `update` talks to GitHub itself, and completion scripts run as every terminal opens;
+    // every other command gets the background check.
     let update_check = match cli.command {
-        Commands::Update(_) => None,
+        Commands::Update(_) | Commands::Completions(_) => None,
         _ => update::BackgroundCheck::start(),
     };
 
@@ -96,6 +107,8 @@ fn main() {
         Commands::Hash(args) => hash::run(args, cli.copy),
         Commands::Json(args) => json::run(args, cli.copy),
         Commands::Enc(args) => enc::run(args, cli.copy),
+        Commands::Cron(args) => cron::run(args, cli.copy),
+        Commands::Completions(args) => completions::run(args),
         Commands::Update(args) => update::run(args),
     }
 
