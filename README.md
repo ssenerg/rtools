@@ -209,6 +209,8 @@ rtools tconv -j '1405/01/01 - 1d'      # the day before Nowruz
 rtools tconv 1790000000 --tz America/New_York
 rtools tconv '2026-03-20 09:00' --tz Europe/Berlin   # 09:00 in Berlin, in UTC and your time
 
+curl -s https://api.github.com/users/octocat | rtools gostruct -n User   # gofmt-ready, with json tags
+
 rtools cron @weekly -n 10              # the next 10 runs
 rtools cron 'CRON_TZ=Asia/Tehran 0 9 * * *'
 ```
