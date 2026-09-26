@@ -63,7 +63,7 @@ fn render(args: &Args) -> Result<String, String> {
 }
 
 /// Parse `input`, pointing at the exact spot if it isn't valid JSON.
-fn parse(input: &str) -> Result<Value, String> {
+pub fn parse(input: &str) -> Result<Value, String> {
     if input.trim().is_empty() {
         return Err("the input is empty".to_string());
     }
