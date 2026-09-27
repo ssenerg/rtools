@@ -7,6 +7,7 @@ mod hash;
 mod jalali;
 mod json;
 mod jwt;
+mod logs;
 mod ports;
 mod qrcode;
 mod tconv;
@@ -74,6 +75,10 @@ enum Commands {
     #[command(name = "enc")]
     Enc(enc::Args),
 
+    /// Make logs readable as they stream: pretty-print JSON and filter with regexes
+    #[command(name = "logs")]
+    Logs(logs::Args),
+
     /// Explain a cron schedule and list when it runs next
     #[command(name = "cron")]
     Cron(cron::Args),
@@ -108,6 +113,7 @@ fn main() {
         Commands::Hash(args) => hash::run(args, cli.copy),
         Commands::Json(args) => json::run(args, cli.copy),
         Commands::Enc(args) => enc::run(args, cli.copy),
+        Commands::Logs(args) => logs::run(args),
         Commands::Cron(args) => cron::run(args, cli.copy),
         Commands::Completions(args) => completions::run(args),
         Commands::Update(args) => update::run(args),
