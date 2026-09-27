@@ -108,6 +108,7 @@ terminal opens, so it keeps up as rtools updates.
 | `jwt`         | Decode, verify and create JSON Web Tokens                                                   |
 | `hash`        | Hash text or files, or check them against a checksum file                                   |
 | `json`        | Pretty-print, minify, validate and query JSON                                               |
+| `logs`        | Make streaming logs readable: pretty-print JSON and filter with regexes                     |
 | `enc`         | Encode or decode base64, base64url, hex and URL encoding                                    |
 | `cron`        | Explain a cron schedule in plain English and list when it runs next                         |
 | `completions` | Print the script that makes Tab complete rtools commands                                    |
@@ -133,6 +134,27 @@ rtools jwt encode '{"sub":"42","role":"admin"}' --secret-file secret.txt --exp 1
 Tokens are signed and checked with a shared secret (HS256, HS384 or HS512).
 Tokens signed with a private key, like RS256 or ES256, can be decoded but not
 checked.
+
+### Logs
+
+```sh
+kubectl logs app -f | rtools logs                          # JSON pretty-printed like jq
+kubectl logs app -f | rtools logs -e 'timeout|refused' -x healthz
+kubectl logs app --since 1h | rtools logs --level warn --short
+docker compose logs -f api | rtools logs -e panic -A 20    # a panic and the 20 lines after it
+```
+
+- JSON lines are pretty-printed and colored like `jq`, with the level colored by
+  how serious it is. Unlike `jq`, lines that aren't JSON, like startup messages,
+  panics and stack traces, pass through instead of stopping everything.
+- JSON after a prefix is recognized too, like the ones `kubectl logs --timestamps`
+  and `--prefix` add. logfmt lines (`level=info msg="..."`), from Go's slog text
+  handler and logrus, are read as well.
+- `--short` prints one line per entry: the time in your own time zone, the level,
+  the message, then the other fields. Stack traces go below it.
+- `-e` shows only lines matching a regex and highlights the matches, `-x` hides
+  lines, `-i` ignores case, and `-A`, `-B` and `-C` add lines of context like
+  grep. `--level warn` hides entries below that level.
 
 ### Time
 
