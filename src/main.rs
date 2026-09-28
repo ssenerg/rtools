@@ -1,3 +1,4 @@
+mod calc;
 mod completions;
 mod conv;
 mod cron;
@@ -77,6 +78,10 @@ enum Commands {
     #[command(name = "enc")]
     Enc(enc::Args),
 
+    /// Calculate math: powers, roots, logs, trigonometric and hyperbolic functions and more
+    #[command(name = "calc")]
+    Calc(calc::Args),
+
     /// Convert between JSON, YAML and TOML
     #[command(name = "conv")]
     Conv(conv::Args),
@@ -123,6 +128,7 @@ fn main() {
         Commands::Hash(args) => hash::run(args, cli.copy),
         Commands::Json(args) => json::run(args, cli.copy),
         Commands::Enc(args) => enc::run(args, cli.copy),
+        Commands::Calc(args) => calc::run(args, cli.copy),
         Commands::Conv(args) => conv::run(args, cli.copy),
         Commands::Logs(args) => logs::run(args),
         Commands::Watch(args) => watch::run(args),
