@@ -207,9 +207,12 @@ Europe/Berlin
 ...
 ```
 
-- The input can be a Unix timestamp (seconds through nanoseconds), an ISO 8601
-  date, `2026-03-20 09:00`, a Jalali date with `-j`, or `now`, `today`,
-  `tomorrow` and `yesterday`.
+- The input can be a Unix timestamp, an ISO 8601 date, `2026-03-20 09:00`, a
+  Jalali date with `-j`, or `now`, `today`, `tomorrow` and `yesterday`.
+- A Unix timestamp's unit (seconds, milliseconds, microseconds or nanoseconds) is
+  picked by its size and shown next to the input, like
+  `1700000000123 (Unix time in milliseconds)`. Decimals and negative timestamps
+  work, and `--unit ms` sets the unit yourself.
 - `--tz` shows the time in that zone; repeat it for several. Dates without an
   offset, and `today`, are read in the first zone instead of your own.
 - Date math adds or subtracts durations: `now + 90m`, `2026-01-01 - 2d`,
