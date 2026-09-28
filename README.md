@@ -105,6 +105,7 @@ terminal opens, so it keeps up as rtools updates.
 | `qrcode`      | Show text as a QR code in the terminal                                                      |
 | `ports`       | List listening ports and kill the processes behind them                                     |
 | `factor`      | Factor a number into primes                                                                 |
+| `calc`        | Calculate math: powers, roots, logs, trigonometric and hyperbolic functions                 |
 | `jwt`         | Decode, verify and create JSON Web Tokens                                                   |
 | `hash`        | Hash text or files, or check them against a checksum file                                   |
 | `json`        | Pretty-print, minify, validate and query JSON                                               |
@@ -188,6 +189,30 @@ header shows the time and the exit code when the command fails. `q` or Ctrl-C
 quits, space runs it again right away. When the output goes to a file or a pipe
 instead, it prints the output each time it changes, which makes a simple change
 log.
+
+### Calculator
+
+```sh
+rtools calc '2^10 + 5!'                   # 1144
+rtools calc 'sin(30°) + cos(π/3)'         # 1
+rtools calc 'log(8, 2) + ln(e^3)'         # 6
+rtools calc 'x = 3; y = 4; √(x² + y²)'    # 5
+rtools calc '30!'                         # 265252859812191058636308480000000
+rtools calc -d 'asin(0.5)'                # 30, with angles in degrees
+rtools calc                               # one expression per line, with ans
+```
+
+- Math is written as on paper: `^` or `²` for powers, `√`, `n!`, `50%`, `30°`,
+  `|x|`, `a mod b`, π, e, τ and φ. `2π`, `3(x+1)` and `2 sin x` multiply, binding
+  tighter than × and ÷, so `1/2π` is 1/(2π). Functions work with or without
+  brackets: `sin 30°`. Persian digits work too.
+- Functions: sin, cos, tan, cot, sec, csc and their inverses; sinh, cosh, tanh,
+  coth, sech, csch and their inverses; exp, ln, log (base 10, or `log(x, base)`),
+  log2, sqrt, cbrt, `root(x, n)`, gamma, `nCr`, `nPr`, abs, sign, floor, ceil,
+  round, mod, gcd, lcm, min, max, hypot, and deg/rad conversions.
+- Whole numbers stay exact (`2^100`, `30!`). Other results show 15 significant
+  digits (`-p` changes that), `sin(π)` is exactly 0, and `tan(90°)` is undefined
+  rather than a huge number.
 
 ### Time
 
