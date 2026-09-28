@@ -1,4 +1,5 @@
 mod completions;
+mod conv;
 mod cron;
 mod enc;
 mod factor;
@@ -14,6 +15,7 @@ mod tconv;
 mod update;
 mod utils;
 mod uuidgen;
+mod watch;
 mod zones;
 
 use clap::{Parser, Subcommand};
@@ -75,9 +77,17 @@ enum Commands {
     #[command(name = "enc")]
     Enc(enc::Args),
 
+    /// Convert between JSON, YAML and TOML
+    #[command(name = "conv")]
+    Conv(conv::Args),
+
     /// Make logs readable as they stream: pretty-print JSON and filter with regexes
     #[command(name = "logs")]
     Logs(logs::Args),
+
+    /// Rerun a command every few seconds and highlight what changed
+    #[command(name = "watch")]
+    Watch(watch::Args),
 
     /// Explain a cron schedule and list when it runs next
     #[command(name = "cron")]
@@ -113,7 +123,9 @@ fn main() {
         Commands::Hash(args) => hash::run(args, cli.copy),
         Commands::Json(args) => json::run(args, cli.copy),
         Commands::Enc(args) => enc::run(args, cli.copy),
+        Commands::Conv(args) => conv::run(args, cli.copy),
         Commands::Logs(args) => logs::run(args),
+        Commands::Watch(args) => watch::run(args),
         Commands::Cron(args) => cron::run(args, cli.copy),
         Commands::Completions(args) => completions::run(args),
         Commands::Update(args) => update::run(args),
