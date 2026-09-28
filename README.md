@@ -108,7 +108,9 @@ terminal opens, so it keeps up as rtools updates.
 | `jwt`         | Decode, verify and create JSON Web Tokens                                                   |
 | `hash`        | Hash text or files, or check them against a checksum file                                   |
 | `json`        | Pretty-print, minify, validate and query JSON                                               |
+| `conv`        | Convert between JSON, YAML and TOML, in any direction                                       |
 | `logs`        | Make streaming logs readable: pretty-print JSON and filter with regexes                     |
+| `watch`       | Rerun a command every few seconds and highlight what changed                                |
 | `enc`         | Encode or decode base64, base64url, hex and URL encoding                                    |
 | `cron`        | Explain a cron schedule in plain English and list when it runs next                         |
 | `completions` | Print the script that makes Tab complete rtools commands                                    |
@@ -155,6 +157,37 @@ docker compose logs -f api | rtools logs -e panic -A 20    # a panic and the 20 
 - `-e` shows only lines matching a regex and highlights the matches, `-x` hides
   lines, `-i` ignores case, and `-A`, `-B` and `-C` add lines of context like
   grep. `--level warn` hides entries below that level.
+
+### Converting JSON, YAML and TOML
+
+```sh
+rtools conv config.yaml --to toml        # print it as TOML
+rtools conv config.yaml config.toml      # write a file; its extension picks the format
+kubectl get deploy api -o json | rtools conv --to yaml
+```
+
+- The input format comes from the file's extension, `--from`, or is detected.
+- YAML anchors and merge keys (`<<: *base`) are resolved, and key order is kept.
+- The YAML it writes quotes anything an older YAML 1.1 reader would take for
+  something else, like `yes`, `NO`, `1.20` or `2026-09-28`, so every tool reads
+  back the same data.
+- Several YAML documents (`---`) become a JSON array. TOML has no null, so nulls
+  are left out with a warning, and TOML needs a table at the top level.
+
+### Watching a command
+
+```sh
+rtools watch kubectl get pods                     # every 2 seconds
+rtools watch -n 5 'kubectl get pods | grep api'   # one quoted argument runs through the shell
+rtools watch --until Running kubectl get pod api-0
+rtools watch -g curl -s https://example.com/status   # stop once the output changes
+```
+
+It fills the terminal and highlights words that changed since the last run. The
+header shows the time and the exit code when the command fails. `q` or Ctrl-C
+quits, space runs it again right away. When the output goes to a file or a pipe
+instead, it prints the output each time it changes, which makes a simple change
+log.
 
 ### Time
 
