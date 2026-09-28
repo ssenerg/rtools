@@ -3,7 +3,7 @@ use crate::utils;
 use crate::zones::{self, Zone};
 use chrono::{DateTime, Duration, FixedOffset, Local, NaiveDateTime, NaiveTime, Utc};
 use chrono_humanize::HumanTime;
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use jiff::Span;
 use std::io::{self, Read};
 use std::process::exit;
@@ -11,7 +11,8 @@ use std::process::exit;
 #[derive(Parser, Debug)]
 #[command(after_help = "\
 Examples:
-  rtools tconv 1700000000
+  rtools tconv 1700000000                 says which unit a timestamp is in
+  rtools tconv 1700000000123 --unit us    when you know better
   rtools tconv now --tz Asia/Tehran --tz America/New_York
   rtools tconv '2026-03-20 09:00' --tz Europe/Berlin    09:00 in Berlin
   rtools tconv 'now + 90m'
@@ -20,7 +21,11 @@ Examples:
 
 Date math adds or subtracts durations like 90m, 1h30m, 2d, 1w, 3mo or 1y
 (units: y, mo, w, d, h, m, s). Days, months and years follow the calendar, so
-+ 1d keeps the time of day across a daylight-saving change.")]
++ 1d keeps the time of day across a daylight-saving change.
+
+A Unix timestamp's unit is picked by its size, so that the date lands between
+1973 and 5138: seconds below 100000000000, then milliseconds, microseconds and
+nanoseconds. Decimals and negative timestamps work too.")]
 pub struct Args {
     /// Unix timestamp, ISO8601/RFC3339, "YYYY-MM-DD[ HH:MM[:SS[.f]]]", now, today, tomorrow or
     /// yesterday, with optional date math like "+ 90m" or "- 2d". If omitted, reads from stdin (pipe)
@@ -35,6 +40,58 @@ pub struct Args {
     /// Dates without an offset are read in the first one instead of local time
     #[arg(long, value_name = "ZONE")]
     tz: Vec<String>,
+
+    /// Read a Unix timestamp in this unit instead of going by its size
+    #[arg(short, long, value_enum)]
+    unit: Option<Unit>,
+}
+
+/// The unit of a Unix timestamp.
+#[derive(Clone, Copy, Debug, PartialEq, ValueEnum)]
+enum Unit {
+    #[value(name = "s", alias = "sec", alias = "seconds")]
+    Seconds,
+    #[value(name = "ms", alias = "millis", alias = "milliseconds")]
+    Millis,
+    #[value(name = "us", alias = "µs", alias = "micros", alias = "microseconds")]
+    Micros,
+    #[value(name = "ns", alias = "nanos", alias = "nanoseconds")]
+    Nanos,
+}
+
+impl Unit {
+    fn name(self) -> &'static str {
+        match self {
+            Unit::Seconds => "seconds",
+            Unit::Millis => "milliseconds",
+            Unit::Micros => "microseconds",
+            Unit::Nanos => "nanoseconds",
+        }
+    }
+
+    fn nanos(self) -> i128 {
+        match self {
+            Unit::Seconds => 1_000_000_000,
+            Unit::Millis => 1_000_000,
+            Unit::Micros => 1_000,
+            Unit::Nanos => 1,
+        }
+    }
+
+    /// The unit that puts the timestamp between 1973 and 5138. 1e11 seconds is
+    /// in the year 5138, while 1e11 milliseconds is in 1973.
+    fn guess(whole: i128) -> Unit {
+        let size = whole.unsigned_abs();
+        if size < 100_000_000_000 {
+            Unit::Seconds
+        } else if size < 100_000_000_000_000 {
+            Unit::Millis
+        } else if size < 100_000_000_000_000_000 {
+            Unit::Micros
+        } else {
+            Unit::Nanos
+        }
+    }
 }
 
 pub fn run(args: &Args, copy: bool) {
@@ -52,8 +109,9 @@ pub fn run(args: &Args, copy: bool) {
     // Where dates without an offset, `today` and calendar math happen.
     let home = zones.first().cloned().unwrap_or_else(Zone::system);
 
-    let dt = parse_input(input, args.jalali, &home, Utc::now()).unwrap_or_else(|e| fail(&e));
-    utils::emit(&format_output(input, dt, &zones), copy).unwrap_or_else(|e| fail(&e));
+    let (dt, unit) =
+        parse_input(input, args.jalali, args.unit, &home, Utc::now()).unwrap_or_else(|e| fail(&e));
+    utils::emit(&format_output(input, dt, unit, &zones), copy).unwrap_or_else(|e| fail(&e));
 }
 
 fn fail(message: &str) -> ! {
@@ -70,15 +128,17 @@ fn read_stdin() -> String {
     buf
 }
 
-/// The input's time: a date, timestamp or keyword, then any date math.
+/// The input's time: a date, timestamp or keyword, then any date math. Also
+/// the unit, when it was a Unix timestamp.
 fn parse_input(
     input: &str,
     jalali: bool,
+    unit: Option<Unit>,
     home: &Zone,
     now: DateTime<Utc>,
-) -> Result<DateTime<Utc>, String> {
+) -> Result<(DateTime<Utc>, Option<Unit>), String> {
     let (base, math) = split_math(input);
-    let Some(mut dt) = parse_base(base, jalali, home, now) else {
+    let Some((mut dt, read_unit)) = parse_base(base, jalali, unit, home, now) else {
         let mut message = if jalali {
             format!("{base:?} isn't a Jalali date like 1403-07-02 or 1403/07/02 14:30")
         } else {
@@ -109,10 +169,21 @@ fn parse_input(
     if zones::timestamp(dt).is_none() {
         return Err("the date is out of range".to_string());
     }
-    Ok(dt)
+    if unit.is_some() && read_unit.is_none() {
+        return Err(format!(
+            "--unit is for Unix timestamps, and {base:?} isn't one"
+        ));
+    }
+    Ok((dt, read_unit))
 }
 
-fn parse_base(base: &str, jalali: bool, home: &Zone, now: DateTime<Utc>) -> Option<DateTime<Utc>> {
+fn parse_base(
+    base: &str,
+    jalali: bool,
+    unit: Option<Unit>,
+    home: &Zone,
+    now: DateTime<Utc>,
+) -> Option<(DateTime<Utc>, Option<Unit>)> {
     let midnight = |days: i64| {
         let today = zones::wall_time(home, now).date();
         from_wall(
@@ -120,17 +191,20 @@ fn parse_base(base: &str, jalali: bool, home: &Zone, now: DateTime<Utc>) -> Opti
             home,
         )
     };
-    match base.to_ascii_lowercase().as_str() {
-        "" | "now" => return Some(now),
-        "today" => return midnight(0),
-        "tomorrow" => return midnight(1),
-        "yesterday" => return midnight(-1),
-        _ => {}
-    }
-    if jalali {
-        return parse_jalali(base, home);
-    }
-    parse_numeric(base).or_else(|| parse_datetime(base, home))
+    let dt = match base.to_ascii_lowercase().as_str() {
+        "" | "now" => Some(now),
+        "today" => midnight(0),
+        "tomorrow" => midnight(1),
+        "yesterday" => midnight(-1),
+        _ if jalali => parse_jalali(base, home),
+        _ => {
+            if let Some((dt, unit)) = parse_numeric(base, unit) {
+                return Some((dt, Some(unit)));
+            }
+            parse_datetime(base, home)
+        }
+    };
+    dt.map(|dt| (dt, None))
 }
 
 /// Splits trailing date math off the input: `now + 1d - 2h` is `now`, then +1d and -2h.
@@ -200,25 +274,30 @@ fn from_wall(wall: NaiveDateTime, zone: &Zone) -> Option<DateTime<Utc>> {
     Some(zones::from_timestamp(zoned.timestamp()))
 }
 
-/// Detects unit by digit count: 10=s, 13=ms, 16=us, 19=ns.
-fn parse_numeric(input: &str) -> Option<DateTime<Utc>> {
-    let value: i128 = input.parse().ok()?;
-
-    match input.len() {
-        10 => DateTime::from_timestamp(value as i64, 0),
-        13 => DateTime::from_timestamp_millis(value as i64),
-        16 => {
-            let secs = value / 1_000_000;
-            let nanos = ((value % 1_000_000) * 1000) as u32;
-            DateTime::from_timestamp(secs as i64, nanos)
-        }
-        19 => {
-            let secs = value / 1_000_000_000;
-            let nanos = (value % 1_000_000_000) as u32;
-            DateTime::from_timestamp(secs as i64, nanos)
-        }
-        _ => None,
+/// A Unix timestamp like 1700000000, 1700000000123, 1700000000.5 or -86400,
+/// in `unit` or else the unit its size suggests.
+fn parse_numeric(input: &str, unit: Option<Unit>) -> Option<(DateTime<Utc>, Unit)> {
+    let (negative, digits) = match input.strip_prefix('-') {
+        Some(rest) => (true, rest),
+        None => (false, input.strip_prefix('+').unwrap_or(input)),
+    };
+    let (whole, fraction) = digits.split_once('.').unwrap_or((digits, ""));
+    let is_digits = |s: &str| s.chars().all(|c| c.is_ascii_digit());
+    if whole.is_empty() || !is_digits(whole) || !is_digits(fraction) {
+        return None;
     }
+    let whole: i128 = whole.parse().ok()?;
+    let unit = unit.unwrap_or_else(|| Unit::guess(whole));
+
+    // The fraction of one unit, in billionths, then in nanoseconds.
+    let billionths: i128 = format!("{:0<9}", &fraction[..fraction.len().min(9)])
+        .parse()
+        .ok()?;
+    let nanos = whole.checked_mul(unit.nanos())? + billionths * unit.nanos() / 1_000_000_000;
+    let nanos = if negative { -nanos } else { nanos };
+    let seconds = i64::try_from(nanos.div_euclid(1_000_000_000)).ok()?;
+    let dt = DateTime::from_timestamp(seconds, nanos.rem_euclid(1_000_000_000) as u32)?;
+    Some((dt, unit))
 }
 
 /// RFC 3339, or a date and time without an offset, which is read in `zone`.
@@ -300,14 +379,17 @@ fn in_zone(zone: &Zone, dt: DateTime<Utc>) -> (DateTime<FixedOffset>, String) {
 }
 
 /// `zones` are the ones asked for with --tz; the first also gets the Jalali date.
-fn format_output(input: &str, dt: DateTime<Utc>, zones: &[Zone]) -> String {
+fn format_output(input: &str, dt: DateTime<Utc>, unit: Option<Unit>, zones: &[Zone]) -> String {
     let local = dt.with_timezone(&Local);
 
     let micros = dt.timestamp() as i128 * 1_000_000 + dt.timestamp_subsec_micros() as i128;
     let nanos = dt.timestamp() as i128 * 1_000_000_000 + dt.timestamp_subsec_nanos() as i128;
 
+    let unit = unit
+        .map(|unit| format!(" (Unix time in {})", unit.name()))
+        .unwrap_or_default();
     let mut out = format!(
-        "Input\n  {input}\n\nUTC\n  {}",
+        "Input\n  {input}{unit}\n\nUTC\n  {}",
         dt.format("%Y-%m-%d %H:%M:%S%.f UTC")
     );
     let mut iso = vec![dt.to_rfc3339()];
@@ -362,16 +444,94 @@ mod tests {
 
     /// Parses `input` as if it were 2026-09-24 23:44 UTC, in `home`.
     fn parse(input: &str, home: &str) -> Result<DateTime<Utc>, String> {
-        parse_input(input, false, &zone(home), utc(2026, 9, 24, 23, 44))
+        parse_input(input, false, None, &zone(home), utc(2026, 9, 24, 23, 44)).map(|(dt, _)| dt)
+    }
+
+    fn at(seconds: i64, nanos: u32) -> DateTime<Utc> {
+        DateTime::from_timestamp(seconds, nanos).unwrap()
     }
 
     #[test]
-    fn parses_seconds_millis_micros_nanos() {
-        assert!(parse_numeric("1700000000").is_some());
-        assert!(parse_numeric("1700000000000").is_some());
-        assert!(parse_numeric("1700000000000000").is_some());
-        assert!(parse_numeric("1700000000000000000").is_some());
-        assert!(parse_numeric("bad").is_none());
+    fn tells_the_unit_of_a_timestamp_by_its_size() {
+        let read = |input: &str| parse_numeric(input, None);
+        let cases = [
+            ("1700000000", at(1_700_000_000, 0), Unit::Seconds),
+            (
+                "1700000000123",
+                at(1_700_000_000, 123_000_000),
+                Unit::Millis,
+            ),
+            (
+                "1700000000123456",
+                at(1_700_000_000, 123_456_000),
+                Unit::Micros,
+            ),
+            (
+                "1700000000123456789",
+                at(1_700_000_000, 123_456_789),
+                Unit::Nanos,
+            ),
+            // Before 2001, seconds have 9 digits; before 2001, milliseconds 12.
+            ("946684800", at(946_684_800, 0), Unit::Seconds),
+            ("946684800000", at(946_684_800, 0), Unit::Millis),
+            ("0", at(0, 0), Unit::Seconds),
+            // Decimals, like zap's timestamps and Python's time.time().
+            (
+                "1700000000.5",
+                at(1_700_000_000, 500_000_000),
+                Unit::Seconds,
+            ),
+            (
+                "1700000000123.25",
+                at(1_700_000_000, 123_250_000),
+                Unit::Millis,
+            ),
+            // Before 1970.
+            ("-86400", at(-86_400, 0), Unit::Seconds),
+            ("-1.5", at(-2, 500_000_000), Unit::Seconds),
+        ];
+        for (input, dt, unit) in cases {
+            assert_eq!(read(input), Some((dt, unit)), "{input}");
+        }
+        for bad in [
+            "bad", "", "-", ".5", "1e9", "1,000", "12:30", "--5", "1.2.3",
+        ] {
+            assert_eq!(read(bad), None, "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn reads_a_timestamp_in_the_unit_given() {
+        assert_eq!(
+            parse_numeric("1700000000123", Some(Unit::Micros)),
+            Some((at(1_700_000, 123_000), Unit::Micros))
+        );
+        assert_eq!(
+            parse_numeric("1700000000", Some(Unit::Millis)),
+            Some((at(1_700_000, 0), Unit::Millis))
+        );
+        let now = utc(2026, 9, 24, 23, 44);
+        assert_eq!(
+            parse_input("1700000000", false, Some(Unit::Seconds), &Zone::UTC, now),
+            Ok((at(1_700_000_000, 0), Some(Unit::Seconds)))
+        );
+        assert_eq!(
+            parse_input("now", false, Some(Unit::Seconds), &Zone::UTC, now).unwrap_err(),
+            "--unit is for Unix timestamps, and \"now\" isn't one"
+        );
+    }
+
+    #[test]
+    fn says_the_unit_in_the_output() {
+        let text = format_output(
+            "1700000000123",
+            at(1_700_000_000, 123_000_000),
+            Some(Unit::Millis),
+            &[],
+        );
+        assert!(text.starts_with("Input\n  1700000000123 (Unix time in milliseconds)\n\nUTC\n  2023-11-14 22:13:20.123 UTC"), "{text}");
+        let text = format_output("now", at(0, 0), None, &[]);
+        assert!(text.starts_with("Input\n  now\n\n"), "{text}");
     }
 
     #[test]
@@ -495,10 +655,11 @@ mod tests {
         let jalali = parse_input(
             "1405/01/01 - 1d",
             true,
+            None,
             &zone("Asia/Tehran"),
             utc(2026, 9, 24, 23, 44),
         );
-        assert_eq!(jalali, Ok(utc(2026, 3, 19, 20, 30)));
+        assert_eq!(jalali, Ok((utc(2026, 3, 19, 20, 30), None)));
     }
 
     #[test]
@@ -529,9 +690,15 @@ mod tests {
         );
         assert!(parse("now + 99999y", "UTC").is_err());
         assert!(
-            parse_input("1403-13-01", true, &zone("UTC"), utc(2026, 9, 24, 23, 44))
-                .unwrap_err()
-                .contains("isn't a Jalali date")
+            parse_input(
+                "1403-13-01",
+                true,
+                None,
+                &zone("UTC"),
+                utc(2026, 9, 24, 23, 44)
+            )
+            .unwrap_err()
+            .contains("isn't a Jalali date")
         );
     }
 
@@ -560,7 +727,7 @@ mod tests {
     #[test]
     fn shows_each_zone() {
         let dt = utc(2026, 7, 1, 10, 0);
-        let text = format_output("x", dt, &[zone("Europe/Berlin"), zone("Asia/Tehran")]);
+        let text = format_output("x", dt, None, &[zone("Europe/Berlin"), zone("Asia/Tehran")]);
         assert!(
             text.contains("\n\nEurope/Berlin\n  2026-07-01 12:00:00 +02:00 CEST\n"),
             "{text}"
