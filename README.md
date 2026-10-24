@@ -111,6 +111,7 @@ terminal opens, so it keeps up as rtools updates.
 | `json`        | Pretty-print, minify, validate and query JSON                                               |
 | `conv`        | Convert between JSON, YAML and TOML, in any direction                                       |
 | `logs`        | Make streaming logs readable: pretty-print JSON and filter with regexes                     |
+| `stats`       | Summarize numbers: count, mean, percentiles and a histogram, with units like `38ms`         |
 | `watch`       | Rerun a command every few seconds and highlight what changed                                |
 | `enc`         | Encode or decode base64, base64url, hex and URL encoding                                    |
 | `cron`        | Explain a cron schedule in plain English and list when it runs next                         |
@@ -158,6 +159,59 @@ docker compose logs -f api | rtools logs -e panic -A 20    # a panic and the 20 
 - `-e` shows only lines matching a regex and highlights the matches, `-x` hides
   lines, `-i` ignores case, and `-A`, `-B` and `-C` add lines of context like
   grep. `--level warn` hides entries below that level.
+
+### Stats
+
+```sh
+grep took= app.log | rtools stats                     # took=38ms, took=1.2s, …
+kubectl logs api --since 1h | rtools stats -k latency_ms -u ms
+kubectl logs api -f | rtools stats -e 'took (\S+)'     # Ctrl-C shows the results so far
+ls -l | rtools stats -f 5 -u B                        # file sizes
+awk '{print $1}' access.log | rtools stats --count    # the most common IPs
+```
+
+```
+count   802
+sum     1.29 min
+min     2.3 ms
+mean    96.6 ms
+stddev  331 ms
+max     3.17 s
+
+p50     37.8 ms
+p90     127 ms
+p95     188 ms
+p99     2.25 s
+
+  2 ms – 5 ms    █▏                               11    1.4%
+  5 ms – 10 ms   █████▌                           53    6.6%
+ 10 ms – 20 ms   ███████████████▎                147   18.3%
+ 20 ms – 50 ms   ██████████████████████████████  290   36.2%
+ 50 ms – 100 ms  ████████████████████▍           197   24.6%
+100 ms – 200 ms  ██████▉                          66    8.2%
+200 ms – 500 ms  ██▍                              23    2.9%
+500 ms – 1 s     ▏                                 1    0.1%
+   1 s – 2 s     ▍                                 4    0.5%
+   2 s – 5 s     █                                10    1.2%
+```
+
+- Each line gives one number. On its own, `stats` takes the number on the line,
+  or the first one with a unit, skipping the digits in dates, times, versions, IP
+  addresses and IDs. `-f 5` takes field 5 (`-f -1` the last), `-k latency` the
+  value of a JSON or `key=value` field (`-k http.latency` for nested JSON), and
+  `-e` what a regex matches.
+- Units are understood, so `500ms`, `1.5s` and Go's `1m30s` add up, and results
+  are shown in a readable unit. Durations go from `ns` to `d`, sizes are `B`,
+  `KB`, `MB`, … (1000) or `KiB`, `MiB`, `Ki`, `Mi`, `K`, `M`, … (1024), and `%`
+  works too. `-u ms` gives a unit to numbers written without one. A bare `m` is
+  minutes.
+- Long-tailed values like latencies get bins that grow (1, 2, 5, 10 ms, …), so
+  both the fast majority and the slow tail show. `-p 50,99.9` picks the
+  percentiles, `-b` the number of bins, and `--json` prints everything as JSON.
+- While a stream like `kubectl logs -f` is coming in, a live summary is shown;
+  Ctrl-C ends it and prints the results.
+- `--count` counts how often each line, or each value `-f`, `-k` or `-e` picks,
+  appears, and shows the 10 most common (`-n` changes that).
 
 ### Converting JSON, YAML and TOML
 
