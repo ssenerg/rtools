@@ -370,15 +370,16 @@ fn build(command: &[String]) -> Command {
     cmd
 }
 
+/// Runs `line` through the shell: sh, or cmd on Windows.
 #[cfg(not(windows))]
-fn shell(line: &str) -> Command {
+pub fn shell(line: &str) -> Command {
     let mut cmd = Command::new("sh");
     cmd.arg("-c").arg(line);
     cmd
 }
 
 #[cfg(windows)]
-fn shell(line: &str) -> Command {
+pub fn shell(line: &str) -> Command {
     use std::os::windows::process::CommandExt;
     let mut cmd = Command::new("cmd");
     cmd.arg("/C").raw_arg(line);

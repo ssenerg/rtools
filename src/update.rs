@@ -346,6 +346,11 @@ fn update_state(change: impl FnOnce(&mut State)) -> io::Result<()> {
 
 /// `%APPDATA%\rtools\update.json` on Windows, `~/.config/rtools/update.json` elsewhere.
 fn state_path() -> Option<PathBuf> {
+    Some(config_dir()?.join("update.json"))
+}
+
+/// `%APPDATA%\rtools` on Windows, `~/.config/rtools` elsewhere.
+pub fn config_dir() -> Option<PathBuf> {
     let var = |key: &str| {
         env::var_os(key)
             .filter(|value| !value.is_empty())
@@ -358,7 +363,7 @@ fn state_path() -> Option<PathBuf> {
             .filter(|dir| dir.is_absolute())
             .or_else(|| Some(var("HOME")?.join(".config")))?
     };
-    Some(config.join(env!("CARGO_PKG_NAME")).join("update.json"))
+    Some(config.join(env!("CARGO_PKG_NAME")))
 }
 
 fn is_due(last: u64, now: u64) -> bool {

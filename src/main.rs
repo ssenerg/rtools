@@ -6,12 +6,14 @@ mod enc;
 mod factor;
 mod gostruct;
 mod hash;
+mod interrupt;
 mod jalali;
 mod json;
 mod jwt;
 mod logs;
 mod ports;
 mod qrcode;
+mod run;
 mod stats;
 mod tconv;
 mod update;
@@ -95,6 +97,10 @@ enum Commands {
     #[command(name = "logs")]
     Logs(logs::Args),
 
+    /// Run several commands at once, each line labeled with its name, and restart them when they exit
+    #[command(name = "run")]
+    Run(run::Args),
+
     /// Rerun a command every few seconds and highlight what changed
     #[command(name = "watch")]
     Watch(watch::Args),
@@ -137,6 +143,7 @@ fn main() {
         Commands::Stats(args) => stats::run(args, cli.copy),
         Commands::Conv(args) => conv::run(args, cli.copy),
         Commands::Logs(args) => logs::run(args),
+        Commands::Run(args) => run::run(args),
         Commands::Watch(args) => watch::run(args),
         Commands::Cron(args) => cron::run(args, cli.copy),
         Commands::Completions(args) => completions::run(args),
