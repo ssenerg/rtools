@@ -622,10 +622,7 @@ impl<'a, W: Write> Runner<'a, W> {
         let State::Running { pid, started } = self.processes[index].state else {
             return;
         };
-        // Programs it started and left behind would keep its port busy.
-        if pid != 0 {
-            kill_group(pid);
-        }
+        clean_up_after(pid);
         let code = match &status {
             Ok(status) => exit_code(status),
             Err(_) => 127,
@@ -677,22 +674,7 @@ impl<'a, W: Write> Runner<'a, W> {
         for process in &mut self.processes {
             match process.state {
                 State::Waiting(_) => process.state = State::Done,
-                State::Running { pid, .. } if pid != 0 => {
-                    // On Windows, Ctrl-C already reached every program in the console.
-                    #[cfg(unix)]
-                    signal_group(
-                        pid,
-                        if matches!(why, Stopping::CtrlC) {
-                            libc::SIGINT
-                        } else {
-                            libc::SIGTERM
-                        },
-                    );
-                    #[cfg(windows)]
-                    if !matches!(why, Stopping::CtrlC) {
-                        kill_tree(pid);
-                    }
-                }
+                State::Running { pid, .. } if pid != 0 => ask_to_stop(pid, why),
                 _ => {}
             }
         }
@@ -704,10 +686,7 @@ impl<'a, W: Write> Runner<'a, W> {
             if let State::Running { pid, .. } = process.state
                 && pid != 0
             {
-                #[cfg(unix)]
-                signal_group(pid, libc::SIGKILL);
-                #[cfg(windows)]
-                kill_tree(pid);
+                kill_group(pid);
             }
         }
     }
@@ -900,12 +879,37 @@ fn signal_group(pid: u32, signal: i32) {
     }
 }
 
-/// Kills what's left of a command's process group.
+/// Asks a command and what it started to stop: SIGINT after Ctrl-C, SIGTERM
+/// otherwise. On Windows, Ctrl-C already reached every program in the
+/// console, and there's no gentle way otherwise.
+fn ask_to_stop(pid: u32, why: Stopping) {
+    let ctrl_c = matches!(why, Stopping::CtrlC);
+    #[cfg(unix)]
+    signal_group(pid, if ctrl_c { libc::SIGINT } else { libc::SIGTERM });
+    #[cfg(windows)]
+    if !ctrl_c {
+        kill_tree(pid);
+    }
+}
+
+/// Kills programs an exited command started and left behind, which would keep
+/// its port busy. Only on Unix, where they share its process group: on
+/// Windows, its ID may already belong to an unrelated program.
+fn clean_up_after(pid: u32) {
+    #[cfg(unix)]
+    if pid != 0 {
+        signal_group(pid, libc::SIGKILL);
+    }
+    #[cfg(windows)]
+    let _ = pid;
+}
+
+/// Kills a command and what it started.
 fn kill_group(pid: u32) {
     #[cfg(unix)]
     signal_group(pid, libc::SIGKILL);
     #[cfg(windows)]
-    let _ = pid;
+    kill_tree(pid);
 }
 
 #[cfg(windows)]
