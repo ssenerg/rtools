@@ -1133,6 +1133,7 @@ dependencies = [
  "flate2",
  "hmac",
  "jiff",
+ "libc",
  "md-5 0.11.0",
  "qrcode",
  "regex-lite",

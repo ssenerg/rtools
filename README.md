@@ -112,6 +112,7 @@ terminal opens, so it keeps up as rtools updates.
 | `conv`        | Convert between JSON, YAML and TOML, in any direction                                       |
 | `logs`        | Make streaming logs readable: pretty-print JSON and filter with regexes                     |
 | `stats`       | Summarize numbers: count, mean, percentiles and a histogram, with units like `38ms`         |
+| `run`         | Run several commands at once, each line labeled with its name, and restart them on exit     |
 | `watch`       | Rerun a command every few seconds and highlight what changed                                |
 | `enc`         | Encode or decode base64, base64url, hex and URL encoding                                    |
 | `cron`        | Explain a cron schedule in plain English and list when it runs next                         |
@@ -228,6 +229,42 @@ kubectl get deploy api -o json | rtools conv --to yaml
   back the same data.
 - Several YAML documents (`---`) become a JSON array. TOML has no null, so nulls
   are left out with a warning, and TOML needs a table at the top level.
+
+### Running several commands
+
+```sh
+rtools run api='go run ./cmd/api' web='npm run dev'
+rtools run --restart db='kubectl port-forward svc/postgres 5432'
+rtools run api='go run .' worker='go run ./worker' -e 'error|panic'
+rtools run api='go run .' web='npm run dev' --save dev   # then later: rtools run dev
+rtools run                                               # runs the Procfile here
+```
+
+```
+api │ $ go run ./cmd/api
+web │ $ npm run dev
+db  │ $ kubectl port-forward svc/postgres 5432
+db  │ Forwarding from 127.0.0.1:5432 -> 5432
+web │ ready on http://localhost:3000
+api │ 10:42:07 INFO  listening  addr=:8080
+db  │ lost connection to pod
+db  │ exited with code 1 · restarting in 1s
+```
+
+- Each command is one quoted argument, run through the shell. `name='command'`
+  names it; otherwise it's named after its program. Every line is labeled with
+  its command's name in its own color, and JSON and logfmt lines are put on one
+  line like `rtools logs --short` (`--raw` turns that off).
+- Ctrl-C stops every command along with the programs they started, like the
+  server `go run` builds, so no port stays busy. A second Ctrl-C kills them at
+  once, and anything still running after 5 seconds is killed too.
+- `--restart` starts a command again when it exits: after 1s, then waiting
+  longer (up to 30s) while it keeps failing quickly. `--stop-all` instead stops
+  everything when one command exits, and exits with its code.
+- `-e` and `-x` show or hide output lines by regex, and `-t` adds the time.
+- `--save NAME` remembers the commands, options and folder, so `rtools run NAME`
+  starts them again from anywhere. `--list` shows what's saved and `--delete`
+  removes one. Without commands, a `Procfile` (`name: command` lines) is run.
 
 ### Watching a command
 

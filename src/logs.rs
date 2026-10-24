@@ -77,7 +77,7 @@ pub enum Level {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, ValueEnum)]
-enum ColorWhen {
+pub enum ColorWhen {
     Auto,
     Always,
     Never,
@@ -422,7 +422,7 @@ fn level_style(level: Option<Level>) -> (&'static str, &'static str) {
     }
 }
 
-fn use_color(when: ColorWhen) -> bool {
+pub fn use_color(when: ColorWhen) -> bool {
     let wanted = match when {
         ColorWhen::Always => true,
         ColorWhen::Never => false,
@@ -434,6 +434,33 @@ fn use_color(when: ColorWhen) -> bool {
     #[cfg(windows)]
     let wanted = wanted && crossterm::ansi_support::supports_ansi();
     wanted
+}
+
+/// Formats lines the way --short does, for run: JSON and logfmt entries on
+/// one line, other lines as they are.
+pub struct ShortLines {
+    printer: Printer<'static>,
+}
+
+impl ShortLines {
+    pub fn new(color: bool) -> ShortLines {
+        let zone = Zone::system();
+        ShortLines {
+            printer: Printer {
+                color,
+                short: true,
+                highlight: &[],
+                today: zones::wall_time(&zone, Utc::now()).date(),
+                zone,
+            },
+        }
+    }
+
+    pub fn format(&self, line: &str) -> String {
+        let mut out = String::new();
+        self.printer.entry(&mut out, &Entry::parse(line));
+        out
+    }
 }
 
 struct Printer<'a> {

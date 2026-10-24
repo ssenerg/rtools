@@ -3,7 +3,7 @@
 //! add up even when they are written in different units. --count tallies how
 //! often each value appears instead.
 
-use crate::utils;
+use crate::{interrupt, utils};
 use clap::{Parser, ValueEnum};
 use regex_lite::Regex;
 use serde_json::{Map, Value, json};
@@ -12,7 +12,6 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, IsTerminal, Read, Write};
 use std::process::exit;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -112,7 +111,9 @@ pub fn run(args: &Args, copy: bool) {
     } else {
         State::Numbers(Numbers::default())
     }));
-    let interrupted = catch_ctrl_c();
+    // After Ctrl-C, show the results so far instead of dying. The command
+    // feeding the pipe gets the Ctrl-C too, so the input usually ends as well.
+    interrupt::catch(false);
 
     // Reading happens on its own thread so that Ctrl-C can end a stream that
     // never does, like kubectl logs -f, and still show what was read.
@@ -138,7 +139,7 @@ pub fn run(args: &Args, copy: bool) {
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
         }
-        if interrupted.load(Ordering::SeqCst) {
+        if interrupt::presses() > 0 {
             break;
         }
         if live && started.elapsed() >= Duration::from_millis(400) {
@@ -1452,39 +1453,6 @@ fn clear_status(shown: bool) {
         let _ = write!(err, "\r\x1b[K");
         let _ = err.flush();
     }
-}
-
-static INTERRUPTED: AtomicBool = AtomicBool::new(false);
-
-/// After Ctrl-C, show the results so far instead of dying. The command
-/// feeding the pipe gets the Ctrl-C too, so the input usually ends as well.
-fn catch_ctrl_c() -> &'static AtomicBool {
-    #[cfg(unix)]
-    // SAFETY: the handler only stores to an atomic, which is signal-safe.
-    unsafe {
-        let _ = signal_hook::low_level::register(signal_hook::consts::SIGINT, || {
-            INTERRUPTED.store(true, Ordering::SeqCst)
-        });
-    }
-    #[cfg(windows)]
-    {
-        use windows_sys::Win32::System::Console::{
-            CTRL_BREAK_EVENT, CTRL_C_EVENT, SetConsoleCtrlHandler,
-        };
-        unsafe extern "system" fn handler(event: u32) -> windows_sys::core::BOOL {
-            if event == CTRL_C_EVENT || event == CTRL_BREAK_EVENT {
-                INTERRUPTED.store(true, Ordering::SeqCst);
-                1
-            } else {
-                0
-            }
-        }
-        // SAFETY: the handler only stores to an atomic.
-        unsafe {
-            SetConsoleCtrlHandler(Some(handler), 1);
-        }
-    }
-    &INTERRUPTED
 }
 
 #[cfg(test)]

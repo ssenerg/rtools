@@ -34,8 +34,10 @@ flate2 = "1.1.10"
 tar = { version = "0.4.46", default-features = false }
 
 [target.'cfg(unix)'.dependencies]
-# stats shows its results on Ctrl-C.
+# stats shows its results on Ctrl-C, and run stops its commands cleanly.
 signal-hook = { version = "0.3", default-features = false }
+# run signals each command's whole process group.
+libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_System_Console"] }
