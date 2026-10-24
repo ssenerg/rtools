@@ -5,7 +5,7 @@
 use crate::utils;
 use clap::Parser;
 use std::collections::HashMap;
-use std::f64::consts::{E, PI, TAU};
+use std::f64::consts::{E, GOLDEN_RATIO, PI, TAU};
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::process::exit;
 
@@ -550,8 +550,8 @@ const CONSTANTS: [(&str, f64); 5] = [
     ("pi", PI),
     ("e", E),
     ("tau", TAU),
-    ("phi", 1.618_033_988_749_895),
-    ("golden", 1.618_033_988_749_895),
+    ("phi", GOLDEN_RATIO),
+    ("golden", GOLDEN_RATIO),
 ];
 
 /// Every function's names, and how many arguments it takes.
