@@ -307,10 +307,10 @@ fn segments(line: &str, before: Option<&str>) -> Vec<(String, bool)> {
 }
 
 /// The alternate screen in raw mode, put back however the watch ends.
-struct Screen;
+pub struct Screen;
 
 impl Screen {
-    fn enter() -> io::Result<Screen> {
+    pub fn enter() -> io::Result<Screen> {
         terminal::enable_raw_mode()?;
         let screen = Screen;
         execute!(io::stdout(), EnterAlternateScreen, cursor::Hide)?;
@@ -445,7 +445,7 @@ fn read_all(pipe: Option<impl Read + Send + 'static>) -> thread::JoinHandle<Vec<
 /// Output as plain text for comparing and drawing: colors and other escape
 /// sequences removed, tabs expanded, and progress lines (\r) reduced to what
 /// they end up showing.
-fn clean(bytes: &[u8]) -> String {
+pub fn clean(bytes: &[u8]) -> String {
     let text = String::from_utf8_lossy(bytes);
     let mut out = String::with_capacity(text.len());
     for line in text.split_inclusive('\n') {
