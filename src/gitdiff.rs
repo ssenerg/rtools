@@ -18,9 +18,9 @@ Examples:
   rtools gitdiff HEAD~3 HEAD -- src  only what changed under src
 
 Keys:
-  up/down    scroll          n/p tab     next and previous file
-  pgup/pgdn  scroll a page   left/right  scroll sideways
-  g/G        top and bottom  q           quit
+  up/down    scroll          left/right        previous and next file
+  pgup/pgdn  scroll a page   shift+left/right  scroll sideways
+  g/G        top and bottom  q                 quit
 
 New files show once they're added with git add. When the output isn't a
 terminal, the diff is printed as git prints it.")]
@@ -269,10 +269,14 @@ impl Viewer {
                 KeyCode::Home | KeyCode::Char('g') => self.scroll = 0,
                 // draw() brings it back to the last screenful.
                 KeyCode::End | KeyCode::Char('G') => self.scroll = usize::MAX,
-                KeyCode::Right | KeyCode::Char('l') => self.pan += 8,
-                KeyCode::Left | KeyCode::Char('h') => self.pan = self.pan.saturating_sub(8),
-                KeyCode::Char('n') | KeyCode::Tab => self.open(self.current + 1),
-                KeyCode::Char('p') | KeyCode::BackTab => {
+                KeyCode::Right if modifiers.contains(KeyModifiers::SHIFT) => self.pan += 8,
+                KeyCode::Left if modifiers.contains(KeyModifiers::SHIFT) => {
+                    self.pan = self.pan.saturating_sub(8)
+                }
+                KeyCode::Char('l') => self.pan += 8,
+                KeyCode::Char('h') => self.pan = self.pan.saturating_sub(8),
+                KeyCode::Right | KeyCode::Char('n') | KeyCode::Tab => self.open(self.current + 1),
+                KeyCode::Left | KeyCode::Char('p') | KeyCode::BackTab => {
                     if let Some(previous) = self.current.checked_sub(1) {
                         self.open(previous);
                     }
@@ -392,7 +396,7 @@ impl Viewer {
 
         queue!(out, cursor::MoveTo(0, height.saturating_sub(1) as u16))?;
         let title = format!(" {}", self.title);
-        let mut keys = "↑/↓ scroll  n/p file  ←/→ pan  q quit ";
+        let mut keys = "↑/↓ scroll  ←/→ file  shift+←/→ pan  q quit ";
         // On a narrow terminal the title matters more than the reminder.
         if title.chars().count() + keys.chars().count() + 2 > width {
             keys = "";

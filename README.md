@@ -293,7 +293,7 @@ rtools gitdiff HEAD~3 HEAD -- src  # only what changed under src
 
 It fills the terminal with the changed files on the left and the open file's
 diff on the right, with each line's old and new line number. The arrow keys
-scroll, `n`/`p` or Tab move between files, `←`/`→` scroll long lines sideways
+scroll, `←`/`→` move between files, Shift+`←`/`→` scroll long lines sideways
 and `q` quits. When the output goes to a file or a pipe instead, it
 prints the diff as `git diff` would, ready to save as a patch.
 
