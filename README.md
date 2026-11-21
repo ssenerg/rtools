@@ -114,6 +114,7 @@ terminal opens, so it keeps up as rtools updates.
 | `stats`       | Summarize numbers: count, mean, percentiles and a histogram, with units like `38ms`         |
 | `run`         | Run several commands at once, each line labeled with its name, and restart them on exit     |
 | `watch`       | Rerun a command every few seconds and highlight what changed                                |
+| `gitdiff`     | Browse a git diff between two commits, branches or tags, file by file                       |
 | `enc`         | Encode or decode base64, base64url, hex and URL encoding                                    |
 | `cron`        | Explain a cron schedule in plain English and list when it runs next                         |
 | `completions` | Print the script that makes Tab complete rtools commands                                    |
@@ -280,6 +281,21 @@ header shows the time and the exit code when the command fails. `q` or Ctrl-C
 quits, space runs it again right away. When the output goes to a file or a pipe
 instead, it prints the output each time it changes, which makes a simple change
 log.
+
+### Git diffs
+
+```sh
+rtools gitdiff                     # uncommitted changes, against HEAD
+rtools gitdiff main                # main against the working tree
+rtools gitdiff v0.10.0 v0.11.0     # between two tags, or v0.10.0..v0.11.0
+rtools gitdiff HEAD~3 HEAD -- src  # only what changed under src
+```
+
+It fills the terminal with the changed files on the left and the open file's
+diff on the right, with each line's old and new line number. The arrow keys
+scroll, `n`/`p` or Tab move between files, `←`/`→` scroll long lines sideways
+and `q` quits. When the output goes to a file or a pipe instead, it
+prints the diff as `git diff` would, ready to save as a patch.
 
 ### Calculator
 

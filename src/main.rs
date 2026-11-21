@@ -4,6 +4,7 @@ mod conv;
 mod cron;
 mod enc;
 mod factor;
+mod gitdiff;
 mod gostruct;
 mod hash;
 mod interrupt;
@@ -105,6 +106,10 @@ enum Commands {
     #[command(name = "watch")]
     Watch(watch::Args),
 
+    /// Browse a git diff between two commits, branches or tags, file by file
+    #[command(name = "gitdiff")]
+    GitDiff(gitdiff::Args),
+
     /// Explain a cron schedule and list when it runs next
     #[command(name = "cron")]
     Cron(cron::Args),
@@ -145,6 +150,7 @@ fn main() {
         Commands::Logs(args) => logs::run(args),
         Commands::Run(args) => run::run(args),
         Commands::Watch(args) => watch::run(args),
+        Commands::GitDiff(args) => gitdiff::run(args),
         Commands::Cron(args) => cron::run(args, cli.copy),
         Commands::Completions(args) => completions::run(args),
         Commands::Update(args) => update::run(args),
