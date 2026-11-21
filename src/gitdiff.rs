@@ -2,10 +2,13 @@
 
 use crate::watch::{self, Screen};
 use clap::Parser;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
+use crossterm::event::{
+    self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind,
+    KeyModifiers, MouseButton, MouseEvent, MouseEventKind,
+};
 use crossterm::style::{Attribute, Color, Print, ResetColor, SetAttribute, SetForegroundColor};
 use crossterm::terminal::{self, Clear, ClearType};
-use crossterm::{cursor, queue};
+use crossterm::{cursor, execute, queue};
 use std::io::{self, IsTerminal, Write};
 use std::process::{Command, exit};
 
@@ -21,6 +24,8 @@ Keys:
   j/k        scroll          up/down p/n  previous and next file
   pgup/pgdn  scroll a page   left/right   scroll sideways
   g/G        top and bottom  q            quit
+
+The mouse wheel scrolls, and clicking a file in the list opens it.
 
 New files show once they're added with git add. When the output isn't a
 terminal, the diff is printed as git prints it.")]
@@ -56,6 +61,8 @@ pub fn run(args: &Args) {
         current: 0,
         scroll: 0,
         pan: 0,
+        list_width: 0,
+        list_first: 0,
     };
     if let Err(e) = viewer.show() {
         fail(&e);
@@ -239,23 +246,32 @@ struct Viewer {
     scroll: usize,
     /// How many columns the diff is scrolled sideways.
     pan: usize,
+    /// Where the file list was last drawn, for clicks: its width and its first file.
+    list_width: usize,
+    list_first: usize,
 }
 
 impl Viewer {
     fn show(mut self) -> Result<(), String> {
-        let _screen = Screen::enter().map_err(|e| format!("can't set up the terminal: {e}"))?;
+        let setup = |e: io::Error| format!("can't set up the terminal: {e}");
+        let _screen = Screen::enter().map_err(setup)?;
+        let _mouse = Mouse::enable().map_err(setup)?;
         loop {
             let rows = self.draw().map_err(|e| format!("can't draw: {e}"))?;
             let event = event::read().map_err(|e| format!("can't read the keyboard: {e}"))?;
-            // Anything else, like a resize, just redraws.
-            let Event::Key(KeyEvent {
-                code,
-                modifiers,
-                kind: KeyEventKind::Press,
-                ..
-            }) = event
-            else {
-                continue;
+            let (code, modifiers) = match event {
+                Event::Key(KeyEvent {
+                    code,
+                    modifiers,
+                    kind: KeyEventKind::Press,
+                    ..
+                }) => (code, modifiers),
+                Event::Mouse(mouse) => {
+                    self.mouse(mouse, rows);
+                    continue;
+                }
+                // Anything else, like a resize, just redraws.
+                _ => continue,
             };
             match code {
                 KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
@@ -282,6 +298,20 @@ impl Viewer {
         }
     }
 
+    fn mouse(&mut self, mouse: MouseEvent, rows: usize) {
+        let row = mouse.row as usize;
+        match mouse.kind {
+            MouseEventKind::ScrollDown => self.scroll += 3,
+            MouseEventKind::ScrollUp => self.scroll = self.scroll.saturating_sub(3),
+            MouseEventKind::Down(MouseButton::Left)
+                if (mouse.column as usize) < self.list_width && (1..=rows).contains(&row) =>
+            {
+                self.open(self.list_first + row - 1)
+            }
+            _ => {}
+        }
+    }
+
     fn open(&mut self, index: usize) {
         if index < self.files.len() {
             self.current = index;
@@ -297,6 +327,7 @@ impl Viewer {
         let rows = height.saturating_sub(2);
         let side = sidebar_width(&self.files, width);
         let pane = width.saturating_sub(side);
+        self.list_width = side;
         let file = &self.files[self.current];
         let digits = file
             .lines
@@ -331,6 +362,7 @@ impl Viewer {
                 .current
                 .saturating_sub(rows / 2)
                 .min(self.files.len().saturating_sub(rows));
+            self.list_first = first;
             for row in 0..rows {
                 let y = (row + 1) as u16;
                 queue!(out, cursor::MoveTo(0, y))?;
@@ -400,6 +432,23 @@ impl Viewer {
         bar(&mut out, &title, keys, width, Attribute::Dim)?;
         out.flush()?;
         Ok(rows)
+    }
+}
+
+/// Mouse reporting, so the wheel scrolls instead of arriving as ↑/↓ and files
+/// can be clicked, turned off however the viewer ends.
+struct Mouse;
+
+impl Mouse {
+    fn enable() -> io::Result<Mouse> {
+        execute!(io::stdout(), EnableMouseCapture)?;
+        Ok(Mouse)
+    }
+}
+
+impl Drop for Mouse {
+    fn drop(&mut self) {
+        let _ = execute!(io::stdout(), DisableMouseCapture);
     }
 }
 
